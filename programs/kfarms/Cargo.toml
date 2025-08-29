@@ -38,3 +38,9 @@ bytemuck = { version = "1.4.0", features = ["min_const_generics", "derive"] }
 uint = "0.9.5"
 
 
+[dev-dependencies]
+solana-program-test = "1.17.18"
+proptest = "1.4.0"
+rand = "0.8"
+spl-token-2022 = "3.0.2"
+

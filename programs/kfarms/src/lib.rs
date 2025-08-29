@@ -6,6 +6,8 @@ pub mod state;
 mod token_operations;
 mod types;
 pub mod utils;
+#[cfg(any(test, feature = "test-bpf"))]
+pub mod tests_support;
 
 use crate::handlers::*;
 use anchor_lang::prelude::*;
