@@ -333,6 +333,8 @@ pub(crate) fn update_reward_config(
         }
         FarmConfigOption::RpsDecimals => {
             let value: u8 = BorshDeserialize::try_from_slice(&data[..1])?;
+            // Guard against unsupported decimal scales; ten_pow supports up to 19
+            require!(value as usize <= 19, FarmError::InvalidConfigValue);
             xmsg!("farm_operations::update_farm_config rps_decimals={value}",);
             xmsg!("prev value {}", reward_info.rewards_per_second_decimals);
             reward_info.rewards_per_second_decimals = value;

@@ -625,7 +625,11 @@ impl TimeUnit {
     pub fn now_from_clock(value: u8, click: &Clock) -> u64 {
         let unit = TimeUnit::try_from(value).unwrap();
         match unit {
-            TimeUnit::Seconds => click.unix_timestamp as u64,
+            // Clamp unix_timestamp to be non-negative to avoid i64 -> u64 underflow
+            TimeUnit::Seconds => {
+                let ts = click.unix_timestamp;
+                if ts < 0 { 0 } else { ts as u64 }
+            }
             TimeUnit::Slots => click.slot,
         }
     }
