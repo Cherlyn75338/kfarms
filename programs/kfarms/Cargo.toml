@@ -38,3 +38,6 @@ bytemuck = { version = "1.4.0", features = ["min_const_generics", "derive"] }
 uint = "0.9.5"
 
 
+[dev-dependencies]
+proptest = "1.2"
+

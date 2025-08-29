@@ -1,6 +1,8 @@
 #![allow(clippy::result_large_err)]
 pub mod farm_operations;
 mod handlers;
+#[cfg(test)]
+mod tests;
 pub mod stake_operations;
 pub mod state;
 mod token_operations;
