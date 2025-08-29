@@ -88,3 +88,37 @@ pub fn u64_mul_div(a: u64, b: u64, c: u64) -> u64 {
     let result = numerator / c;
     result.try_into().expect("u64_mul_div overflow")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn u64_mul_div_monotone_in_numerator(a in 0u64..=1_000_000_000_000, b in 0u64..=1_000_000_000_000, c in 1u64..=1_000_000_000_000) {
+            let r1 = u64_mul_div(a, b, c);
+            // Increase numerator by adding c (scaled in b) should not decrease the result
+            let a2 = a.saturating_add(1);
+            let r2 = u64_mul_div(a2, b, c);
+            prop_assert!(r2 >= r1);
+        }
+
+        #[test]
+        fn u64_mul_div_exact_when_divides(a in 0u64..=1_000_000_000, b in 0u64..=1_000u64, c in 1u64..=1_000u64) {
+            // Construct value that divides exactly: (a*b) % c == 0 by setting b' = b * c
+            let b_exact = b.saturating_mul(c);
+            let r = u64_mul_div(a, b_exact, c);
+            prop_assert_eq!(r, a.saturating_mul(b));
+        }
+
+        #[test]
+        fn full_decimal_mul_div_consistency(a_u64 in 0u64..=1_000_000_000_000, b in 0u64..=1_000_000, c_u64 in 1u64..=1_000_000_000_000) {
+            let a = Decimal::from(a_u64);
+            let c = Decimal::from(c_u64);
+            let res = full_decimal_mul_div(a, b, c);
+            // Should not overflow and should be finite
+            let _ = res.to_scaled_val::<u128>().unwrap();
+        }
+    }
+}

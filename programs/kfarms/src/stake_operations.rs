@@ -429,3 +429,84 @@ pub fn withdraw_farm(
         farm_to_freeze: false,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{FarmState, UserState};
+
+    #[test]
+    fn convert_amount_to_stake_edges() {
+        // zero amount
+        let stake = convert_amount_to_stake(0, Decimal::zero(), 0);
+        assert_eq!(stake, Decimal::zero());
+
+        // empty pool -> 1:1 stake minting
+        let stake = convert_amount_to_stake(12345, Decimal::zero(), 0);
+        assert_eq!(stake, Decimal::from(12345u64));
+
+        // proportional in non-empty pool
+        let total_stake = Decimal::from(1_000u64);
+        let total_amount = 2_000u64;
+        // depositing 100 should yield 50 stake
+        let stake = convert_amount_to_stake(100, total_stake, total_amount);
+        assert_eq!(stake, Decimal::from(50u64));
+    }
+
+    #[test]
+    fn convert_stake_to_amount_rounding() {
+        // total stake 3, total amount 10 -> each stake ~ 3.333 amount
+        let total_stake = Decimal::from(3u64);
+        let total_amount = 10u64;
+        let one = Decimal::from(1u64);
+        let down = convert_stake_to_amount(one, total_stake, total_amount, false);
+        let up = convert_stake_to_amount(one, total_stake, total_amount, true);
+        assert_eq!(down, 3);
+        assert_eq!(up, 4);
+    }
+
+    #[test]
+    fn withdraw_farm_pro_rata_and_freeze() {
+        let mut farm = FarmState::default();
+        farm.total_staked_amount = 60;
+        farm.total_pending_amount = 40;
+
+        // Partial withdraw 10 out of 100
+        let eff = withdraw_farm(&mut farm, 10).unwrap();
+        assert!(!eff.farm_to_freeze);
+        assert_eq!(eff.amount_to_withdraw, 10);
+        assert_eq!(farm.total_staked_amount, 54); // 60 - 6
+        assert_eq!(farm.total_pending_amount, 36); // 40 - 4
+
+        // Withdraw all
+        let eff = withdraw_farm(&mut farm, 90).unwrap();
+        assert!(eff.farm_to_freeze);
+        assert_eq!(eff.amount_to_withdraw, 90);
+        assert_eq!(farm.total_staked_amount, 0);
+        assert_eq!(farm.total_pending_amount, 0);
+    }
+
+    #[test]
+    fn unstake_penalty_with_expiry_before_start_zero_penalty() {
+        // Ensure WithExpiry before start timestamp yields 0 penalty per current logic
+        let mut farm = FarmState::default();
+        farm.locking_mode = LockingMode::WithExpiry as u64;
+        farm.locking_duration = 1_000;
+        farm.locking_start_timestamp = 1_000_000; // starts in the future
+        farm.locking_early_withdrawal_penalty_bps = 5_000; // 50%
+
+        // Set user/farm with some active stake/amount
+        farm.total_staked_amount = 1_000;
+        farm.set_total_active_stake_decimal(Decimal::from(1_000u64));
+
+        let mut user = UserState::default();
+        user.set_active_stake_decimal(Decimal::from(1_000u64));
+
+        // Unstake half the shares before start time
+        let ts_now = 999_000;
+        let (_, _gained_pending_stake, penalty) =
+            unstake(&mut user, &mut farm, Decimal::from(500u64), ts_now).unwrap();
+
+        assert_eq!(penalty, 0, "Penalty should be zero before start timestamp in WithExpiry");
+    }
+}
