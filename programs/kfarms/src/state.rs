@@ -184,6 +184,47 @@ impl FarmState {
         };
         Ok(self.deposit_cap_amount == 0 || final_amount <= self.deposit_cap_amount)
     }
+
+    // Test helper methods
+    #[cfg(test)]
+    pub fn get_total_active_stake(&self) -> Decimal {
+        self.get_total_active_stake_decimal()
+    }
+
+    #[cfg(test)]
+    pub fn get_total_pending_stake(&self) -> Decimal {
+        self.get_total_pending_stake_decimal()
+    }
+
+    #[cfg(test)]
+    pub fn set_total_active_stake(&mut self, value: Decimal) {
+        self.set_total_active_stake_decimal(value);
+    }
+
+    #[cfg(test)]
+    pub fn set_total_pending_stake(&mut self, value: Decimal) {
+        self.set_total_pending_stake_decimal(value);
+    }
+}
+
+// Test-only fields and methods
+#[cfg(test)]
+impl FarmState {
+    pub fn total_active_amount(&self) -> u64 {
+        self.total_staked_amount
+    }
+    
+    pub fn set_total_active_amount(&mut self, amount: u64) {
+        self.total_staked_amount = amount;
+    }
+    
+    pub fn is_frozen(&self) -> bool {
+        self.is_farm_frozen != 0
+    }
+    
+    pub fn set_is_frozen(&mut self, frozen: bool) {
+        self.is_farm_frozen = if frozen { 1 } else { 0 };
+    }
 }
 
 impl Default for FarmState {
@@ -477,6 +518,47 @@ impl UserState {
     pub fn set_rewards_tally_decimal(&mut self, index: usize, value: Decimal) {
         self.rewards_tally_scaled[index] = value.to_scaled_val().unwrap();
     }
+
+    // Test helper methods
+    #[cfg(test)]
+    pub fn get_active_stake(&self) -> Decimal {
+        self.get_active_stake_decimal()
+    }
+
+    #[cfg(test)]
+    pub fn get_pending_deposit_stake(&self) -> Decimal {
+        self.get_pending_deposit_stake_decimal()
+    }
+
+    #[cfg(test)]
+    pub fn get_pending_withdrawal_unstake(&self) -> Decimal {
+        self.get_pending_withdrawal_unstake_decimal()
+    }
+
+    #[cfg(test)]
+    pub fn get_rewards_tally(&self, index: usize) -> Decimal {
+        self.get_rewards_tally_decimal(index)
+    }
+
+    #[cfg(test)]
+    pub fn set_active_stake(&mut self, value: Decimal) {
+        self.set_active_stake_decimal(value);
+    }
+
+    #[cfg(test)]
+    pub fn set_pending_deposit_stake(&mut self, value: Decimal) {
+        self.set_pending_deposit_stake_decimal(value);
+    }
+
+    #[cfg(test)]
+    pub fn set_pending_withdrawal_unstake(&mut self, value: Decimal) {
+        self.set_pending_withdrawal_unstake_decimal(value);
+    }
+
+    #[cfg(test)]
+    pub fn set_rewards_tally(&mut self, index: usize, value: Decimal) {
+        self.set_rewards_tally_decimal(value, index);
+    }
 }
 
 impl Default for UserState {
@@ -537,6 +619,17 @@ impl RewardInfo {
 
     pub fn set_reward_per_share_decimal(&mut self, value: Decimal) {
         self.reward_per_share_scaled = value.to_scaled_val().unwrap();
+    }
+
+    // Test helper methods
+    #[cfg(test)]
+    pub fn get_reward_per_share(&self) -> Decimal {
+        self.get_reward_per_share_decimal()
+    }
+
+    #[cfg(test)]
+    pub fn set_reward_per_share(&mut self, value: Decimal) {
+        self.set_reward_per_share_decimal(value);
     }
 }
 

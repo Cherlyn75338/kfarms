@@ -7,6 +7,9 @@ mod token_operations;
 mod types;
 pub mod utils;
 
+#[cfg(test)]
+mod tests;
+
 use crate::handlers::*;
 use anchor_lang::prelude::*;
 use decimal_wad::decimal::Decimal;
@@ -300,6 +303,20 @@ pub enum FarmError {
     InvalidTransferOwnershipStakeAmount,
     #[msg("Invalid authority for transfer ownersip new user state initialization")]
     InvalidTransferOwnershipNewOwner,
+    #[msg("Deposit cap exceeded")]
+    DepositCapExceeded,
+    #[msg("Farm is frozen")]
+    FarmFrozen,
+    #[msg("Warmup period not complete")]
+    WarmupNotComplete,
+    #[msg("Insufficient stake")]
+    InsufficientStake,
+    #[msg("Cooldown period not complete")]
+    CooldownNotComplete,
+    #[msg("Price calculation overflow")]
+    PriceOverflow,
+    #[msg("Invalid price exponent")]
+    InvalidPriceExponent,
 }
 
 impl From<DecimalError> for FarmError {
