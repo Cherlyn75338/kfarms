@@ -16,3 +16,6 @@ spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
 spl-associated-token-account = "2.3.0"
 
 decimal-wad = "0.1.9"
+
+[workspace.metadata.cargo-fuzz]
+sanitizer = "address"
