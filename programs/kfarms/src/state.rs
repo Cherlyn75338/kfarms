@@ -12,6 +12,7 @@ use crate::{
     utils::consts::{self, MAX_REWARDS_TOKENS},
     FarmError,
 };
+use crate::{dbg_msg, utils::math::u128_mul_div};
 use anchor_lang::prelude::Pubkey;
 use decimal_wad::decimal::Decimal;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -159,7 +160,10 @@ impl FarmState {
         scope_price: Option<DatedPrice>,
         ts: u64,
     ) -> Result<bool> {
-        let unadjusted_total = self.total_staked_amount + amount;
+        let unadjusted_total = self
+            .total_staked_amount
+            .checked_add(amount)
+            .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
         let final_amount = if self.scope_oracle_price_id == u64::MAX {
             unadjusted_total
         } else {
@@ -174,12 +178,22 @@ impl FarmState {
                 return Err(FarmError::ScopeOraclePriceTooOld.into());
             } else {
                 xmsg!("Price: {:?}", price);
-                let unadjusted_total = u128::from(unadjusted_total);
-                let price_value = u128::from(price.price.value);
-                let price_ten_pow = u128::from(ten_pow(price.price.exp as usize));
-                (unadjusted_total * price_value / price_ten_pow)
+                let exp_usize = price.price.exp as usize;
+                if exp_usize > 19 {
+                    return Err(FarmError::InvalidOracleConfig.into());
+                }
+                let unadjusted_total_u128 = u128::from(unadjusted_total);
+                let price_value_u128 = u128::from(price.price.value);
+                let price_ten_pow_u128 = u128::from(ten_pow(exp_usize));
+
+                let adjusted: u128 = u128_mul_div(
+                    unadjusted_total_u128,
+                    price_value_u128,
+                    price_ten_pow_u128,
+                )?;
+                adjusted
                     .try_into()
-                    .unwrap()
+                    .map_err(|_| dbg_msg!(FarmError::IntegerOverflow))?
             }
         };
         Ok(self.deposit_cap_amount == 0 || final_amount <= self.deposit_cap_amount)
@@ -376,7 +390,7 @@ impl RewardScheduleCurve {
             return err!(FarmError::InvalidTimestamp);
         }
 
-        let mut cumulative_amount = 0u64;
+        let mut cumulative_amount_u128: u128 = 0;
 
         let start_index = self.most_recent_curve_starting_point(last_issued_ts)?;
 
@@ -398,11 +412,19 @@ impl RewardScheduleCurve {
                 current_ts
             };
 
-            let period_amount = point.reward_per_time_unit * (end_ts - start_ts);
-            cumulative_amount += period_amount;
+            let duration = u128::from(end_ts - start_ts);
+            let rps_u128 = u128::from(point.reward_per_time_unit);
+            let period_amount_u128 = rps_u128
+                .checked_mul(duration)
+                .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
+            cumulative_amount_u128 = cumulative_amount_u128
+                .checked_add(period_amount_u128)
+                .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
         }
 
-        Ok(cumulative_amount)
+        Ok(cumulative_amount_u128
+            .try_into()
+            .map_err(|_| dbg_msg!(FarmError::IntegerOverflow))?)
     }
 
     pub fn get_current_rps(&self, current_ts: u64) -> Result<u64> {
