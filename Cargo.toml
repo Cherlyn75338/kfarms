@@ -16,3 +16,9 @@ spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
 spl-associated-token-account = "2.3.0"
 
 decimal-wad = "0.1.9"
+
+[workspace.dev-dependencies]
+solana-program-test = "1.17.18"
+proptest = "1.4.0"
+rand = "0.8"
+spl-token-2022 = "3.0.2"

@@ -418,6 +418,7 @@ static_assertions::const_assert_eq!(
 );
 #[account(zero_copy)]
 #[derive(Debug, Eq, PartialEq)]
+#[repr(C)]
 pub struct UserState {
     pub user_id: u64,
     pub farm_state: Pubkey,
