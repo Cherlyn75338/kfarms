@@ -1,0 +1,222 @@
+name: KFarms Security Audit Pipeline
+
+on:
+  push:
+    branches: [ main, audit/* ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: 1.75.0
+  SOLANA_VERSION: 1.17.0
+
+jobs:
+  mathematical-verification:
+    name: Mathematical Invariant Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          override: true
+          components: rustfmt, clippy
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Run mathematical checks
+        run: |
+          cargo build --release
+          cargo run --release -- math --state test_data/protocol_state.json
+      
+      - name: Run property tests
+        run: |
+          cargo test --release -- --nocapture property_tests
+      
+      - name: Check invariant assertions
+        run: |
+          RUSTFLAGS="-C overflow-checks=on" cargo test --release
+
+  solana-security:
+    name: Solana/Anchor Security Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Solana
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v${{ env.SOLANA_VERSION }}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      
+      - name: Setup Anchor
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor anchor-cli --locked
+          anchor --version
+      
+      - name: Run Anchor security checks
+        run: |
+          cargo run --release -- solana --program ./programs --id 11111111111111111111111111111111
+      
+      - name: Check for unsafe patterns
+        run: |
+          ./scripts/check_unsafe_patterns.sh
+
+  fuzz-testing:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Rust nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+      
+      - name: Run fuzzing
+        run: |
+          cd fuzz
+          timeout 300 cargo +nightly fuzz run math_fuzz || true
+          timeout 300 cargo +nightly fuzz run points_fuzz || true
+        continue-on-error: true
+      
+      - name: Upload fuzz artifacts
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
+
+  threat-detection:
+    name: Threat Pattern Detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+      
+      - name: Run threat detection
+        run: |
+          python scripts/detect_threats.py --history test_data/tx_history.json
+      
+      - name: Check for flash attacks
+        run: |
+          cargo run --release -- threats --history test_data/tx_history.json --window 100
+
+  coverage-analysis:
+    name: Test Coverage Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          override: true
+      
+      - name: Install tarpaulin
+        run: cargo install cargo-tarpaulin
+      
+      - name: Generate coverage
+        run: |
+          cargo tarpaulin --out Xml --all-features --workspace --timeout 300
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./cobertura.xml
+          fail_ci_if_error: true
+
+  report-generation:
+    name: Generate Audit Report
+    needs: [mathematical-verification, solana-security, threat-detection]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          override: true
+      
+      - name: Generate reports
+        run: |
+          cargo run --release -- report --output ./reports --format markdown
+          cargo run --release -- report --output ./reports --format json
+          cargo run --release -- report --output ./reports --format html
+      
+      - name: Upload reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: audit-reports
+          path: reports/
+      
+      - name: Comment PR with summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('./reports/audit_report.md', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+
+  integration-test:
+    name: Integration Testing
+    runs-on: ubuntu-latest
+    services:
+      solana:
+        image: solanalabs/solana:v1.17.0
+        ports:
+          - 8899:8899
+          - 8900:8900
+        options: >-
+          --health-cmd "solana cluster-version"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup test environment
+        run: |
+          cargo build --release
+          ./scripts/setup_test_env.sh
+      
+      - name: Run integration tests
+        run: |
+          cargo test --release --test integration -- --test-threads=1
+      
+      - name: Run end-to-end scenarios
+        run: |
+          ./scripts/run_e2e_scenarios.sh

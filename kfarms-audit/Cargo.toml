@@ -1,0 +1,63 @@
+[workspace]
+
+[package]
+name = "kfarms-audit"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Core dependencies
+anchor-lang = "0.29.0"
+anchor-spl = "0.29.0"
+solana-program = "1.17.0"
+solana-sdk = "1.17.0"
+spl-token = "4.0.0"
+spl-token-2022 = "0.9.0"
+
+# Math and verification
+num-traits = "0.2"
+num-bigint = "0.4"
+fixed = "1.24"
+rust_decimal = "1.33"
+uint = "0.9"
+
+# Testing and fuzzing
+proptest = "1.4"
+quickcheck = "1.0"
+arbitrary = { version = "1.3", features = ["derive"] }
+solana-program-test = "1.17.0"
+solana-test-validator = "1.17.0"
+
+# Analysis tools
+thiserror = "1.0"
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+borsh = "1.3"
+bytemuck = "1.14"
+
+# Logging and metrics
+env_logger = "0.10"
+log = "0.4"
+colored = "2.0"
+
+[dev-dependencies]
+criterion = "0.5"
+rstest = "0.18"
+test-case = "3.1"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+
+[profile.test]
+overflow-checks = true
+
+[[bin]]
+name = "audit-runner"
+path = "src/main.rs"
+
+[lib]
+name = "kfarms_audit"
+path = "src/lib.rs"

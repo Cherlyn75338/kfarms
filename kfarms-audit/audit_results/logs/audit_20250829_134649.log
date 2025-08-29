@@ -1,0 +1,19 @@
+[0;34m═══════════════════════════════════════════════════════════════[0m
+[0;34m           KFarms Protocol Security Audit v1.0                    [0m
+[0;34m═══════════════════════════════════════════════════════════════[0m
+
+
+[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[0;32m  PHASE 1: Discovery and Scoping[0m
+[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[1;33m  ➜[0m Collecting program artifacts...
+[0;32m  ✓[0m Found 23 Rust files
+[1;33m  ➜[0m Extracting Anchor IDL...
+[1;33m  ➜[0m No IDL found, skipping...
+[1;33m  ➜[0m Identifying critical instructions...
+[0;32m  ✓[0m Found 3 critical instructions
+
+[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[0;32m  PHASE 2: Mathematical Specification and Verification[0m
+[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[1;33m  ➜[0m Building audit tool...

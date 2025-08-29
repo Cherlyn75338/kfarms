@@ -1,0 +1,42 @@
+{
+  "pools": {
+    "pool1": {
+      "total_points": 1000000,
+      "cumulative_rpp": 5000,
+      "emission_rate": 1000,
+      "last_update_time": 1700000000,
+      "total_distributed": 50000,
+      "reward_vault_balance": 1000000,
+      "stake_vault_balance": 500000
+    }
+  },
+  "users": {
+    "user1": {
+      "staked_amount": 10000,
+      "lock_duration": 2592000,
+      "lock_end_time": 1702592000,
+      "points": 20000,
+      "external_points": 5000,
+      "c_paid": 4500,
+      "accrued_rewards": 100,
+      "total_claimed": 1000
+    },
+    "user2": {
+      "staked_amount": 5000,
+      "lock_duration": 0,
+      "lock_end_time": 0,
+      "points": 5000,
+      "external_points": 0,
+      "c_paid": 4800,
+      "accrued_rewards": 50,
+      "total_claimed": 500
+    }
+  },
+  "global": {
+    "current_time": 1700000100,
+    "current_slot": 200000000,
+    "total_emission_integral": 10000000,
+    "total_distributed_global": 9500000,
+    "governance_snapshot_time": null
+  }
+}

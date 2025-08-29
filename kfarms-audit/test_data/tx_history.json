@@ -1,0 +1,36 @@
+[
+  {
+    "user": "11111111111111111111111111111111",
+    "provider": "22222222222222222222222222222222",
+    "new_points": 1000,
+    "old_points": 500,
+    "slot": 100000,
+    "timestamp": 1700000000,
+    "custody_proof": null
+  },
+  {
+    "user": "11111111111111111111111111111111",
+    "provider": "22222222222222222222222222222222",
+    "new_points": 2000,
+    "old_points": 1000,
+    "slot": 100100,
+    "timestamp": 1700000100,
+    "custody_proof": {
+      "provider_pda": "33333333333333333333333333333333",
+      "locked_amount": 2000,
+      "lock_end_time": 1702592000,
+      "merkle_root": null,
+      "signature": null,
+      "nonce": 12345
+    }
+  },
+  {
+    "user": "44444444444444444444444444444444",
+    "provider": "22222222222222222222222222222222",
+    "new_points": 5000,
+    "old_points": 0,
+    "slot": 100200,
+    "timestamp": 1700000200,
+    "custody_proof": null
+  }
+]
