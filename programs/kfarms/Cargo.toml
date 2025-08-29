@@ -38,3 +38,5 @@ bytemuck = { version = "1.4.0", features = ["min_const_generics", "derive"] }
 uint = "0.9.5"
 
 
+[dev-dependencies]
+proptest = { version = "1.4.0", default-features = false, features = ["std"] }

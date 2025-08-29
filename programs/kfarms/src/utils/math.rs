@@ -92,6 +92,7 @@ pub fn u64_mul_div(a: u64, b: u64, c: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn ten_pow_within_bounds() {
@@ -125,5 +126,49 @@ mod tests {
         let out = full_decimal_mul_div(stake, total_amount, total_stake);
         assert_eq!(out.try_floor::<u64>().unwrap(), 250u64);
         assert_eq!(out.try_ceil::<u64>().unwrap(), 250u64);
+    }
+}
+
+#[cfg(test)]
+mod prop_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    // Fuzz monotonicity and bounds for u64_mul_div
+    proptest! {
+        #[test]
+        fn u64_mul_div_monotone_in_a(a in 0u64..=u64::MAX, b in 0u64..=u64::MAX, c in 1u64..=u64::MAX) {
+            // Avoid cases where a*b/c would overflow u64
+            let lhs = (a as u128) * (b as u128);
+            let rhs = (c as u128) * (u64::MAX as u128);
+            prop_assume!(lhs <= rhs);
+            let r1 = u64_mul_div(a, b, c);
+            let r2 = u64_mul_div(a.saturating_add(1), b, c);
+            prop_assert!(r2 >= r1);
+        }
+
+        #[test]
+        fn u64_mul_div_monotone_in_b(a in 0u64..=u64::MAX, b in 0u64..=u64::MAX, c in 1u64..=u64::MAX) {
+            let lhs = (a as u128) * (b as u128);
+            let rhs = (c as u128) * (u64::MAX as u128);
+            prop_assume!(lhs <= rhs);
+            let r1 = u64_mul_div(a, b, c);
+            let r2 = u64_mul_div(a, b.saturating_add(1), c);
+            prop_assert!(r2 >= r1);
+        }
+
+        #[test]
+        fn u64_mul_div_upper_bound(a in 0u64..=u64::MAX, b in 0u64..=u64::MAX, c in 1u64..=u64::MAX) {
+            let lhs = (a as u128) * (b as u128);
+            let rhs = (c as u128) * (u64::MAX as u128);
+            prop_assume!(lhs <= rhs);
+            let r = u64_mul_div(a, b, c);
+            // floor(a*b/c) <= a*b/c <= max(a,b) * (min(a,b)/c) + ...
+            // But easy bound: r <= max(a,b) when c >= min(a,b). Not always true; use safe bound:
+            // r*c <= a*b
+            let lhs = (r as u128) * (c as u128);
+            let rhs = (a as u128) * (b as u128);
+            prop_assert!(lhs <= rhs);
+        }
     }
 }
