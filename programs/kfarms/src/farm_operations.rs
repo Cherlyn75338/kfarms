@@ -890,6 +890,117 @@ pub fn refresh_global_rewards(
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use decimal_wad::decimal::Decimal;
+
+    fn one_wad_u128() -> u128 {
+        Decimal::one().to_scaled_val::<u128>().unwrap()
+    }
+
+    #[test]
+    fn refresh_global_reward_proportional_non_delegated() {
+        let mut farm = FarmState::default();
+        farm.num_reward_tokens = 1;
+        farm.total_staked_amount = 1_000;
+        farm.set_total_active_stake_decimal(Decimal::from(1_000u64));
+
+        let ri = &mut farm.reward_infos[0];
+        ri.rewards_available = 10_000;
+        ri.reward_schedule_curve = RewardScheduleCurve::from_constant(100);
+        ri.rewards_per_second_decimals = 0;
+        ri.last_issuance_ts = 0;
+
+        refresh_global_reward(&mut farm, None, 10, 0).unwrap();
+
+        let ri = &farm.reward_infos[0];
+        assert_eq!(ri.rewards_issued_unclaimed, 1_000);
+        assert_eq!(ri.rewards_available, 9_000);
+        assert_eq!(ri.last_issuance_ts, 10);
+        // Non-delegated: rewards / Decimal(total_stake); 1000/1000 = 1.0 -> scaled WAD
+        assert_eq!(ri.reward_per_share_scaled, one_wad_u128());
+    }
+
+    #[test]
+    fn refresh_global_reward_proportional_delegated() {
+        let mut farm = FarmState::default();
+        farm.num_reward_tokens = 1;
+        farm.total_staked_amount = 1_000;
+        farm.total_active_stake_scaled = Decimal::from(1_000u64).to_scaled_val().unwrap();
+        // mark as delegated
+        farm.delegate_authority = Pubkey::new_from_array([7u8; 32]);
+
+        let ri = &mut farm.reward_infos[0];
+        ri.rewards_available = 10_000;
+        ri.reward_schedule_curve = RewardScheduleCurve::from_constant(100);
+        ri.rewards_per_second_decimals = 0;
+        ri.last_issuance_ts = 0;
+
+        refresh_global_reward(&mut farm, None, 10, 0).unwrap();
+
+        let ri = &farm.reward_infos[0];
+        assert_eq!(ri.rewards_issued_unclaimed, 1_000);
+        assert_eq!(ri.rewards_available, 9_000);
+        assert_eq!(ri.last_issuance_ts, 10);
+        // Delegated: rewards / total_active_stake_scaled; 1000/(1000*WAD) -> scaled value 1
+        assert_eq!(ri.reward_per_share_scaled, 1);
+    }
+
+    #[test]
+    fn refresh_global_reward_constant_type() {
+        let mut farm = FarmState::default();
+        farm.num_reward_tokens = 1;
+        farm.total_staked_amount = 1_000;
+        farm.set_total_active_stake_decimal(Decimal::from(1_000u64));
+
+        let ri = &mut farm.reward_infos[0];
+        ri.rewards_available = 1_000_000;
+        ri.reward_schedule_curve = RewardScheduleCurve::from_constant(1);
+        ri.rewards_per_second_decimals = 0;
+        ri.last_issuance_ts = 0;
+        ri.reward_type = RewardType::Constant as u8;
+
+        refresh_global_reward(&mut farm, None, 10, 0).unwrap();
+
+        let ri = &farm.reward_infos[0];
+        // 1 per unit * 10 units * total_staked_amount (1000) = 10_000
+        assert_eq!(ri.rewards_issued_unclaimed, 10_000);
+        assert_eq!(ri.rewards_available, 990_000);
+        assert_eq!(ri.last_issuance_ts, 10);
+        // reward_per_share increment should be 10_000 / 1_000 = 10
+        let expected = (Decimal::from(10u64)).to_scaled_val::<u128>().unwrap();
+        assert_eq!(ri.reward_per_share_scaled, expected);
+    }
+
+    #[test]
+    fn set_stake_delegated_invariants() {
+        let mut farm = FarmState::default();
+        // mark as delegated
+        farm.delegate_authority = Pubkey::new_from_array([9u8; 32]);
+        farm.deposit_warmup_period = 0;
+        farm.withdrawal_cooldown_period = 0;
+        farm.total_pending_amount = 0;
+        farm.total_pending_stake_scaled = 0;
+        farm.total_active_stake_scaled = 0;
+        farm.total_staked_amount = 0;
+
+        let mut user = UserState::default();
+
+        // increase stake by 100
+        set_stake(&mut farm, &mut user, 100, 1).unwrap();
+        assert_eq!(farm.total_staked_amount, 100);
+        assert_eq!(farm.total_active_stake_scaled, 100);
+        assert_eq!(user.active_stake_scaled, 100);
+
+        // decrease stake to 40
+        set_stake(&mut farm, &mut user, 40, 2).unwrap();
+        assert_eq!(farm.total_staked_amount, 40);
+        assert_eq!(farm.total_active_stake_scaled, 40);
+        assert_eq!(user.active_stake_scaled, 40);
+    }
+}
+
 pub fn deposit_to_farm_vault(farm_state: &mut FarmState, amount: u64) -> Result<()> {
     xmsg!("farm_operations::deposit_to_farm_vault amount={}", amount);
     stake_ops::increase_total_amount(farm_state, amount).map_err(Into::into)

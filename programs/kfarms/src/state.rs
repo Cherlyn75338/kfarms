@@ -186,6 +186,21 @@ impl FarmState {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn can_accept_deposit_without_oracle() {
+        let mut farm = FarmState::default();
+        farm.deposit_cap_amount = 1_000;
+        farm.total_staked_amount = 800;
+        // oracle disabled by default (scope_oracle_price_id == u64::MAX)
+        assert!(farm.can_accept_deposit(100, None, 0).unwrap());
+        assert!(!farm.can_accept_deposit(300, None, 0).unwrap());
+    }
+}
+
 impl Default for FarmState {
     fn default() -> FarmState {
         FarmState {

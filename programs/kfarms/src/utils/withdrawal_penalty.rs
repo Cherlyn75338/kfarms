@@ -69,3 +69,32 @@ pub fn apply_early_withdrawal_penalty(
 
     Ok((unstake_amount - penalty_amount, penalty_amount))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn penalty_zero_before_start_with_expiry() {
+        // timestamp_now < locking_start => penalty = 0
+        let locking_duration = 1000;
+        let locking_start = 1_000_000;
+        let now = locking_start - 1;
+        let (net, pen) = apply_early_withdrawal_penalty(locking_duration, locking_start, now, 5000, 1_000).unwrap();
+        assert_eq!(pen, 0);
+        assert_eq!(net, 1_000);
+    }
+
+    #[test]
+    fn penalty_linear_in_time_remaining() {
+        let locking_duration = 1000;
+        let locking_start = 0;
+        let amount = 10_000u64;
+        // Halfway -> penalty_bps/2
+        let (_net, pen_half) = apply_early_withdrawal_penalty(locking_duration, locking_start, 500, 1000, amount).unwrap();
+        assert_eq!(pen_half, u64_mul_div(amount, 500, BPS_DIV_FACTOR));
+        // At maturity -> zero
+        let (_net, pen_zero) = apply_early_withdrawal_penalty(locking_duration, locking_start, 1000, 1000, amount).unwrap();
+        assert_eq!(pen_zero, 0);
+    }
+}

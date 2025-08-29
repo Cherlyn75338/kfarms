@@ -183,6 +183,41 @@ pub fn convert_amount_to_stake(amount: u64, total_stake: Decimal, total_amount: 
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn convert_stake_amount_roundtrip_simple() {
+        let total_stake = Decimal::from(200u64);
+        let total_amount = 1_000u64;
+        let user_stake = Decimal::from(50u64);
+
+        let amt = convert_stake_to_amount(user_stake, total_stake, total_amount, false);
+        assert_eq!(amt, 250);
+        let back = convert_amount_to_stake(amt, total_stake, total_amount);
+        assert_eq!(back.try_floor::<u64>().unwrap(), 50u64);
+    }
+
+    #[test]
+    fn pro_rata_withdraw_farm_splits() {
+        let mut farm = state::FarmState::default();
+        {
+            let mut acc = farm.get_accessor();
+            acc.total_active_amount = 800;
+            acc.total_pending_amount = 200;
+        }
+
+        let res = withdraw_farm(&mut farm, 500).unwrap();
+        // 500/1000 of active(800) = 400, pending(200) = 100
+        assert_eq!(res.amount_to_withdraw, 500);
+        let acc = farm.get_accessor();
+        assert_eq!(acc.total_active_amount, 400);
+        assert_eq!(acc.total_pending_amount, 100);
+        assert!(!res.farm_to_freeze);
+    }
+}
+
 pub fn add_pending_deposit_stake(
     user_stake: &mut impl UserStakeAccessor,
     farm: &mut impl FarmStakeAccessor,

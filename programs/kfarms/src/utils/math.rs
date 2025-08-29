@@ -88,3 +88,42 @@ pub fn u64_mul_div(a: u64, b: u64, c: u64) -> u64 {
     let result = numerator / c;
     result.try_into().expect("u64_mul_div overflow")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ten_pow_within_bounds() {
+        assert_eq!(ten_pow(0), 1);
+        assert_eq!(ten_pow(1), 10);
+        assert_eq!(ten_pow(9), 1_000_000_000);
+        assert_eq!(ten_pow(19), 10_000_000_000_000_000_000);
+    }
+
+    #[test]
+    #[should_panic]
+    fn ten_pow_out_of_bounds_panics() {
+        let _ = ten_pow(20);
+    }
+
+    #[test]
+    fn u64_mul_div_basic_cases() {
+        assert_eq!(u64_mul_div(100, 50, 100), 50);
+        assert_eq!(u64_mul_div(100, 1, 3), 33); // floor division
+        assert_eq!(u64_mul_div(u64::MAX, 1, u64::MAX), 1);
+        assert_eq!(u64_mul_div(0, 123, 7), 0);
+    }
+
+    #[test]
+    fn full_decimal_mul_div_proportion() {
+        // 50/200 of 1000 = 250
+        let stake = Decimal::from(50u64);
+        let total_amount = 1000u64;
+        let total_stake = Decimal::from(200u64);
+
+        let out = full_decimal_mul_div(stake, total_amount, total_stake);
+        assert_eq!(out.try_floor::<u64>().unwrap(), 250u64);
+        assert_eq!(out.try_ceil::<u64>().unwrap(), 250u64);
+    }
+}
