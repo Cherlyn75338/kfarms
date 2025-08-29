@@ -5,7 +5,7 @@ use crate::types::{
     AddRewardEffects, HarvestEffects, StakeEffects, WithdrawEffects, WithdrawRewardEffects,
 };
 use crate::utils::consts::BPS_DIV_FACTOR;
-use crate::utils::math::{ten_pow, u64_mul_div};
+use crate::utils::math::{ten_pow, u128_mul_div, u64_mul_div};
 use crate::xmsg;
 use crate::{
     dbg_msg, stake_operations as stake_ops, utils::consts::MAX_REWARDS_TOKENS, FarmConfigOption,
@@ -27,7 +27,11 @@ pub fn update_global_config(
 ) -> Result<()> {
     match key {
         GlobalConfigOption::SetPendingGlobalAdmin => {
-            let value: [u8; 32] = value[0..32].try_into().unwrap();
+            let value: [u8; 32] = value
+                .get(0..32)
+                .ok_or(FarmError::InvalidConfigValue)?
+                .try_into()
+                .map_err(|_| FarmError::InvalidConfigValue)?;
             let pubkey = Pubkey::new_from_array(value);
             xmsg!(
                 "Changing global_config admin {} -> {:?}",
@@ -37,7 +41,12 @@ pub fn update_global_config(
             global_config.pending_global_admin = pubkey;
         }
         GlobalConfigOption::SetTreasuryFeeBps => {
-            let value = u64::from_le_bytes(value[..8].try_into().unwrap());
+            let bytes: [u8; 8] = value
+                .get(..8)
+                .ok_or(FarmError::InvalidConfigValue)?
+                .try_into()
+                .map_err(|_| FarmError::InvalidConfigValue)?;
+            let value = u64::from_le_bytes(bytes);
             if value > 10_000 {
                 xmsg!("ERROR: treasury_fee_bps must be <= 10000");
                 return Err(FarmError::InvalidConfigValue.into());
@@ -213,7 +222,9 @@ pub fn update_farm_config(
             xmsg!("farm_operations::update_farm_config locking_mode={value}",);
             xmsg!("prev value {:?}", farm_state.locking_mode);
             farm_state.locking_mode = value;
-            LockingMode::try_from_primitive(value).unwrap();
+            // Validate value is a supported LockingMode
+            let _ = LockingMode::try_from_primitive(value)
+                .map_err(|_| FarmError::InvalidConfigValue)?;
         }
         FarmConfigOption::LockingStartTimestamp => {
             let value: u64 = BorshDeserialize::try_from_slice(data)?;
@@ -324,9 +335,11 @@ pub(crate) fn update_reward_config(
         }
         FarmConfigOption::RewardType => {
             let value: u8 = BorshDeserialize::try_from_slice(&data[..1])?;
+            let rt = RewardType::try_from_primitive(value)
+                .map_err(|_| FarmError::InvalidConfigValue)?;
             xmsg!(
                 "farm_operations::update_farm_config reward_type={value} type={:?}",
-                RewardType::try_from_primitive(value).unwrap()
+                rt
             );
             xmsg!("prev value {:?}", reward_info.reward_type);
             reward_info.reward_type = value;
@@ -342,7 +355,8 @@ pub(crate) fn update_reward_config(
 
             xmsg!("Updating reward schedule curve with points={:?}", points);
             xmsg!("Prev value {:?}", reward_info.reward_schedule_curve.points);
-            reward_info.reward_schedule_curve = RewardScheduleCurve::from_points(&points).unwrap();
+            reward_info.reward_schedule_curve =
+                RewardScheduleCurve::from_points(&points)?;
         }
         _ => unimplemented!(),
     }
@@ -593,7 +607,10 @@ pub fn user_refresh_reward(
 
     user_state.set_rewards_tally_decimal(reward_index, new_reward_tally);
 
-    user_state.rewards_issued_unclaimed[reward_index] += reward;
+    user_state.rewards_issued_unclaimed[reward_index] = user_state.rewards_issued_unclaimed
+        [reward_index]
+        .checked_add(reward)
+        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
 
     Ok(())
 }
@@ -660,9 +677,20 @@ pub fn reward_user_once(
     reward_index: u64,
     amount: u64,
 ) -> Result<()> {
-    farm_state.reward_infos[reward_index as usize].rewards_issued_unclaimed += amount;
-    farm_state.reward_infos[reward_index as usize].rewards_issued_cumulative += amount;
-    user_state.rewards_issued_unclaimed[reward_index as usize] += amount;
+    farm_state.reward_infos[reward_index as usize].rewards_issued_unclaimed = farm_state
+        .reward_infos[reward_index as usize]
+        .rewards_issued_unclaimed
+        .checked_add(amount)
+        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
+    farm_state.reward_infos[reward_index as usize].rewards_issued_cumulative = farm_state
+        .reward_infos[reward_index as usize]
+        .rewards_issued_cumulative
+        .checked_add(amount)
+        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
+    user_state.rewards_issued_unclaimed[reward_index as usize] = user_state.rewards_issued_unclaimed
+        [reward_index as usize]
+        .checked_add(amount)
+        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
     Ok(())
 }
 
@@ -718,8 +746,14 @@ pub fn unstake(
         token_amount_removed
     );
 
-    farm_state.slashed_amount_current += token_amount_penalty;
-    farm_state.slashed_amount_cumulative += token_amount_penalty;
+    farm_state.slashed_amount_current = farm_state
+        .slashed_amount_current
+        .checked_add(token_amount_penalty)
+        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
+    farm_state.slashed_amount_cumulative = farm_state
+        .slashed_amount_cumulative
+        .checked_add(token_amount_penalty)
+        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
 
     for i in 0..farm_state.num_reward_tokens as usize {
         let reward_tally = &mut user_state.rewards_tally_scaled[i];
@@ -785,15 +819,27 @@ pub fn refresh_global_reward(
             .get_cumulative_amount_issued_since_last_ts(reward_info.last_issuance_ts, ts)?)
             as u128;
 
-        let reward_type_amt = match reward_info.reward_type() {
-            RewardType::Proportional => cumulative_amt,
-            RewardType::Constant => cumulative_amt * u128::from(farm_state.total_staked_amount),
+        let rps_decimals: usize = reward_info.rewards_per_second_decimals as usize;
+        if rps_decimals > 19 {
+            return Err(FarmError::InvalidConfigValue.into());
+        }
+
+        let decimal_adjusted_amt: u128 = match reward_info.reward_type() {
+            RewardType::Proportional => {
+                let denom = u128::from(ten_pow(rps_decimals));
+                cumulative_amt / denom
+            }
+            RewardType::Constant => {
+                let denom = u128::from(ten_pow(rps_decimals));
+                u128_mul_div(
+                    cumulative_amt,
+                    u128::from(farm_state.total_staked_amount),
+                    denom,
+                )?
+            }
         };
 
-        let decimal_adjusted_amt =
-            reward_type_amt / u128::from(ten_pow(reward_info.rewards_per_second_decimals.into()));
-
-        let oracle_adjusted_amt = if farm_state.scope_oracle_price_id == u64::MAX {
+        let oracle_adjusted_amt: u128 = if farm_state.scope_oracle_price_id == u64::MAX {
             decimal_adjusted_amt
         } else {
             let price = scope_price.ok_or(FarmError::MissingScopePrices)?;
@@ -804,13 +850,16 @@ pub fn refresh_global_reward(
                     price.unix_timestamp,
                     farm_state.scope_oracle_max_age
                 );
-                return Err(FarmError::ScopeOraclePriceTooOld.into());
+            	return Err(FarmError::ScopeOraclePriceTooOld.into());
             } else {
                 xmsg!("Price: {:?}", price);
-                let decimal_adjusted_amt = decimal_adjusted_amt as u128;
                 let px = price.price.value as u128;
-                let factor = ten_pow(price.price.exp as usize) as u128;
-                decimal_adjusted_amt * px / factor
+                let exp_usize: usize = price.price.exp as usize;
+                if exp_usize > 19 {
+                    return Err(FarmError::InvalidOracleConfig.into());
+                }
+                let factor = u128::from(ten_pow(exp_usize));
+                u128_mul_div(decimal_adjusted_amt, px, factor)?
             }
         };
 
@@ -823,7 +872,9 @@ pub fn refresh_global_reward(
             oracle_adjusted_amt,
         );
 
-        oracle_adjusted_amt.try_into().unwrap()
+        oracle_adjusted_amt
+            .try_into()
+            .map_err(|_| dbg_msg!(FarmError::IntegerOverflow))?
     };
 
     if amount == 0 {

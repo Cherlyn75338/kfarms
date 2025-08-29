@@ -39,11 +39,19 @@ fn get_withdrawal_penalty_bps(
         return Err(FarmError::EarlyWithdrawalNotAllowed);
     }
 
-    let time_remaining = timestamp_maturity - timestamp_now;
+    let time_remaining = timestamp_maturity
+        .checked_sub(timestamp_now)
+        .ok_or(FarmError::InvalidLockingTimestamps)?;
 
-    let total_duration = timestamp_maturity - timestamp_beginning;
+    let total_duration = timestamp_maturity
+        .checked_sub(timestamp_beginning)
+        .ok_or(FarmError::InvalidLockingTimestamps)?;
 
-    let penalty = penalty_bps * time_remaining / total_duration;
+    if total_duration == 0 {
+        return Err(FarmError::InvalidLockingTimestamps);
+    }
+
+    let penalty = u64_mul_div(penalty_bps, time_remaining, total_duration);
 
     Ok(penalty)
 }

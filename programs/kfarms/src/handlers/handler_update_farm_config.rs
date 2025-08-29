@@ -11,7 +11,8 @@ pub fn process(ctx: Context<UpdateFarmConfig>, mode: u16, data: &[u8]) -> Result
     let farm_state = &mut ctx.accounts.farm_state.load_mut()?;
     let scope_price = load_scope_price(&ctx.accounts.scope_prices, farm_state).map_or(None, |v| v);
 
-    let mode: FarmConfigOption = mode.try_into().unwrap();
+    let mode: FarmConfigOption = FarmConfigOption::try_from(mode)
+        .map_err(|_| FarmError::InvalidConfigValue)?;
 
     if matches!(
         mode,

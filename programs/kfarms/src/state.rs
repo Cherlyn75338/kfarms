@@ -4,6 +4,7 @@ use crate::{
     utils::{consts::REWARD_CURVE_POINTS, math::ten_pow},
     xmsg,
 };
+use crate::dbg_msg;
 use anchor_lang::prelude::*;
 use bytemuck::{Pod, Zeroable};
 use scope::DatedPrice;
@@ -138,11 +139,17 @@ impl FarmState {
     }
 
     pub fn set_total_active_stake_decimal(&mut self, value: Decimal) {
-        self.total_active_stake_scaled = value.to_scaled_val().unwrap();
+        self.total_active_stake_scaled = value
+            .to_scaled_val()
+            .map_err(|_| dbg_msg!(FarmError::IntegerOverflow))
+            .unwrap();
     }
 
     pub fn set_total_pending_stake_decimal(&mut self, value: Decimal) {
-        self.total_pending_stake_scaled = value.to_scaled_val().unwrap();
+        self.total_pending_stake_scaled = value
+            .to_scaled_val()
+            .map_err(|_| dbg_msg!(FarmError::IntegerOverflow))
+            .unwrap();
     }
 
     pub fn is_delegated(&self) -> bool {
@@ -150,7 +157,8 @@ impl FarmState {
     }
 
     pub fn get_locking_mode(&self) -> LockingMode {
-        LockingMode::try_from(self.locking_mode).unwrap()
+        // Fallback to None if corrupted value ever present; configuration updates validate
+        LockingMode::try_from(self.locking_mode).unwrap_or(LockingMode::None)
     }
 
     pub fn can_accept_deposit(
@@ -174,12 +182,17 @@ impl FarmState {
                 return Err(FarmError::ScopeOraclePriceTooOld.into());
             } else {
                 xmsg!("Price: {:?}", price);
-                let unadjusted_total = u128::from(unadjusted_total);
+                let exp_usize: usize = price.price.exp as usize;
+                if exp_usize > 19 {
+                    return Err(FarmError::InvalidOracleConfig.into());
+                }
+                let unadjusted_total128 = u128::from(unadjusted_total);
                 let price_value = u128::from(price.price.value);
-                let price_ten_pow = u128::from(ten_pow(price.price.exp as usize));
-                (unadjusted_total * price_value / price_ten_pow)
+                let price_ten_pow = u128::from(ten_pow(exp_usize));
+                let adjusted: u128 = (unadjusted_total128 * price_value) / price_ten_pow;
+                adjusted
                     .try_into()
-                    .unwrap()
+                    .map_err(|_| dbg_msg!(FarmError::IntegerOverflow))?
             }
         };
         Ok(self.deposit_cap_amount == 0 || final_amount <= self.deposit_cap_amount)
@@ -283,7 +296,8 @@ impl RewardScheduleCurve {
             ts_start: 0,
             reward_per_time_unit,
         }];
-        Self::from_points(&points).unwrap()
+        // Safe unwrap is replaced by expect since points are statically valid
+        Self::from_points(&points).expect("valid constant reward curve")
     }
 
     pub fn set_constant(&mut self, rps: u64) {
@@ -398,8 +412,18 @@ impl RewardScheduleCurve {
                 current_ts
             };
 
-            let period_amount = point.reward_per_time_unit * (end_ts - start_ts);
-            cumulative_amount += period_amount;
+            let duration = end_ts
+                .checked_sub(start_ts)
+                .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
+
+            let period_amount = point
+                .reward_per_time_unit
+                .checked_mul(duration)
+                .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
+
+            cumulative_amount = cumulative_amount
+                .checked_add(period_amount)
+                .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
         }
 
         Ok(cumulative_amount)
@@ -463,19 +487,31 @@ impl UserState {
     }
 
     pub fn set_active_stake_decimal(&mut self, value: Decimal) {
-        self.active_stake_scaled = value.to_scaled_val().unwrap();
+        self.active_stake_scaled = value
+            .to_scaled_val()
+            .map_err(|_| dbg_msg!(FarmError::IntegerOverflow))
+            .unwrap();
     }
 
     pub fn set_pending_deposit_stake_decimal(&mut self, value: Decimal) {
-        self.pending_deposit_stake_scaled = value.to_scaled_val().unwrap();
+        self.pending_deposit_stake_scaled = value
+            .to_scaled_val()
+            .map_err(|_| dbg_msg!(FarmError::IntegerOverflow))
+            .unwrap();
     }
 
     pub fn set_pending_withdrawal_unstake_decimal(&mut self, value: Decimal) {
-        self.pending_withdrawal_unstake_scaled = value.to_scaled_val().unwrap();
+        self.pending_withdrawal_unstake_scaled = value
+            .to_scaled_val()
+            .map_err(|_| dbg_msg!(FarmError::IntegerOverflow))
+            .unwrap();
     }
 
     pub fn set_rewards_tally_decimal(&mut self, index: usize, value: Decimal) {
-        self.rewards_tally_scaled[index] = value.to_scaled_val().unwrap();
+        self.rewards_tally_scaled[index] = value
+            .to_scaled_val()
+            .map_err(|_| dbg_msg!(FarmError::IntegerOverflow))
+            .unwrap();
     }
 }
 
@@ -623,7 +659,7 @@ impl Default for LockingMode {
 
 impl TimeUnit {
     pub fn now_from_clock(value: u8, click: &Clock) -> u64 {
-        let unit = TimeUnit::try_from(value).unwrap();
+        let unit = TimeUnit::try_from(value).unwrap_or(TimeUnit::Seconds);
         match unit {
             TimeUnit::Seconds => click.unix_timestamp as u64,
             TimeUnit::Slots => click.slot,
@@ -641,6 +677,6 @@ impl RewardInfo {
     }
 
     pub fn reward_type(&self) -> RewardType {
-        RewardType::try_from(self.reward_type).unwrap()
+        RewardType::try_from(self.reward_type).unwrap_or(RewardType::Proportional)
     }
 }

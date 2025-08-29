@@ -9,7 +9,7 @@ use crate::{
         math::{full_decimal_mul_div, u64_mul_div},
         withdrawal_penalty::apply_early_withdrawal_penalty,
     },
-    xmsg, FarmError,
+    dbg_msg, xmsg, FarmError,
 };
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]

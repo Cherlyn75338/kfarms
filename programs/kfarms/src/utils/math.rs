@@ -61,6 +61,37 @@ impl TryFrom<U256> for U192 {
     }
 }
 
+fn u128_to_u256(value: u128) -> U256 {
+    let lo: u64 = (value & 0xFFFF_FFFF_FFFF_FFFF) as u64;
+    let hi: u64 = (value >> 64) as u64;
+    U256([lo, hi, 0, 0])
+}
+
+fn try_u256_to_u128(value: U256) -> Option<u128> {
+    if value.0[2] != 0 || value.0[3] != 0 {
+        return None;
+    }
+    Some(((value.0[1] as u128) << 64) | (value.0[0] as u128))
+}
+
+/// Multiplies two u128 values and divides by a u128 denominator using 256-bit
+/// intermediate arithmetic to avoid overflow. Returns an error if the result
+/// does not fit into u128 or if division by zero is attempted.
+pub fn u128_mul_div(a: u128, b: u128, c: u128) -> Result<u128, crate::FarmError> {
+    if c == 0 {
+        return Err(crate::FarmError::MathOverflow);
+    }
+
+    let a256: U256 = u128_to_u256(a);
+    let b256: U256 = u128_to_u256(b);
+    let c256: U256 = u128_to_u256(c);
+
+    let numerator: U256 = a256 * b256;
+    let result: U256 = numerator / c256;
+
+    try_u256_to_u128(result).ok_or(crate::FarmError::IntegerOverflow)
+}
+
 pub fn full_decimal_mul_div(a: Decimal, b: u64, c: Decimal) -> Decimal {
     let a_scaled: U192 = a.0;
     let c_scaled: U192 = c.0;
