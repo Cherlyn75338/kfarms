@@ -159,7 +159,10 @@ impl FarmState {
         scope_price: Option<DatedPrice>,
         ts: u64,
     ) -> Result<bool> {
-        let unadjusted_total = self.total_staked_amount + amount;
+        let unadjusted_total = self
+            .total_staked_amount
+            .checked_add(amount)
+            .ok_or(FarmError::IntegerOverflow)?;
         let final_amount = if self.scope_oracle_price_id == u64::MAX {
             unadjusted_total
         } else {
@@ -174,12 +177,18 @@ impl FarmState {
                 return Err(FarmError::ScopeOraclePriceTooOld.into());
             } else {
                 xmsg!("Price: {:?}", price);
-                let unadjusted_total = u128::from(unadjusted_total);
-                let price_value = u128::from(price.price.value);
-                let price_ten_pow = u128::from(ten_pow(price.price.exp as usize));
-                (unadjusted_total * price_value / price_ten_pow)
-                    .try_into()
-                    .unwrap()
+                let unadjusted_total_u128 = u128::from(unadjusted_total);
+                let price_value_u128 = u128::from(price.price.value);
+                let price_ten_pow_u128 = u128::from(ten_pow(price.price.exp as usize));
+
+                debug_assert!(price_ten_pow_u128 != 0);
+
+                let adjusted = unadjusted_total_u128
+                    .checked_mul(price_value_u128)
+                    .ok_or(FarmError::IntegerOverflow)?
+                    / price_ten_pow_u128;
+
+                u64::try_from(adjusted).map_err(|_| FarmError::IntegerOverflow)?
             }
         };
         Ok(self.deposit_cap_amount == 0 || final_amount <= self.deposit_cap_amount)

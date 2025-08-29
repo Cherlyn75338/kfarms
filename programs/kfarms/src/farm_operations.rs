@@ -807,10 +807,14 @@ pub fn refresh_global_reward(
                 return Err(FarmError::ScopeOraclePriceTooOld.into());
             } else {
                 xmsg!("Price: {:?}", price);
-                let decimal_adjusted_amt = decimal_adjusted_amt as u128;
-                let px = price.price.value as u128;
-                let factor = ten_pow(price.price.exp as usize) as u128;
-                decimal_adjusted_amt * px / factor
+                let decimal_adjusted_amt_u128 = decimal_adjusted_amt as u128;
+                let px_u128 = price.price.value as u128;
+                let factor_u128 = ten_pow(price.price.exp as usize) as u128;
+                debug_assert!(factor_u128 != 0);
+                decimal_adjusted_amt_u128
+                    .checked_mul(px_u128)
+                    .ok_or(FarmError::IntegerOverflow)?
+                    / factor_u128
             }
         };
 
@@ -823,7 +827,7 @@ pub fn refresh_global_reward(
             oracle_adjusted_amt,
         );
 
-        oracle_adjusted_amt.try_into().unwrap()
+        u64::try_from(oracle_adjusted_amt).map_err(|_| FarmError::IntegerOverflow)?
     };
 
     if amount == 0 {

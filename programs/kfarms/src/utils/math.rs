@@ -85,6 +85,8 @@ pub fn u64_mul_div(a: u64, b: u64, c: u64) -> u64 {
     let b: U128 = b.into();
 
     let numerator = a * b;
+    // c is expected > 0 by callers; keep a debug assert to avoid panics in release
+    debug_assert!(c != 0);
     let result = numerator / c;
     result.try_into().expect("u64_mul_div overflow")
 }

@@ -67,5 +67,7 @@ pub fn apply_early_withdrawal_penalty(
 
     let penalty_amount = u64_mul_div(unstake_amount, penalty_bps, BPS_DIV_FACTOR);
 
-    Ok((unstake_amount - penalty_amount, penalty_amount))
+    // Saturating math to be extra safe, though penalty_amount is <= unstake_amount by construction
+    let post_penalty = unstake_amount.saturating_sub(penalty_amount);
+    Ok((post_penalty, penalty_amount))
 }
