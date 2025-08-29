@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 pub mod farm_operations;
+#[cfg(any(target_arch = "bpf", feature = "with-program"))]
 mod handlers;
 pub mod stake_operations;
 pub mod state;
@@ -7,6 +8,7 @@ mod token_operations;
 mod types;
 pub mod utils;
 
+#[cfg(any(target_arch = "bpf", feature = "with-program"))]
 use crate::handlers::*;
 use anchor_lang::prelude::*;
 use decimal_wad::decimal::Decimal;
@@ -14,6 +16,9 @@ use decimal_wad::error::DecimalError;
 use num_derive::FromPrimitive;
 use state::*;
 use thiserror::Error;
+
+#[cfg(test)]
+mod tests;
 
 #[cfg(all(
     feature = "mainnet",
@@ -34,6 +39,7 @@ solana_security_txt::security_txt! {
     auditors: "OtterSec, Offside Labs"
 }
 
+#[cfg(any(target_arch = "bpf", feature = "with-program"))]
 #[program]
 pub mod farms {
     use super::*;

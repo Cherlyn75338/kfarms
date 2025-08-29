@@ -16,13 +16,15 @@ use anchor_lang::prelude::Pubkey;
 use decimal_wad::decimal::Decimal;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
+#[cfg(any(feature = "test-bpf", target_arch = "bpf"))]
 static_assertions::const_assert_eq!(
     consts::SIZE_GLOBAL_CONFIG,
     std::mem::size_of::<GlobalConfig>() + 8
 );
+#[cfg(any(feature = "test-bpf", target_arch = "bpf"))]
 static_assertions::const_assert_eq!(0, std::mem::size_of::<GlobalConfig>() % 8);
-#[account(zero_copy)]
-#[derive(Debug)]
+#[cfg_attr(any(feature = "test-bpf", target_arch = "bpf"), account(zero_copy))]
+#[derive(Debug, Copy, Clone)]
 pub struct GlobalConfig {
     pub global_admin: Pubkey,
 
@@ -59,13 +61,15 @@ pub enum GlobalConfigOption {
     SetTreasuryFeeBps = 1,
 }
 
+#[cfg(any(feature = "test-bpf", target_arch = "bpf"))]
 static_assertions::const_assert_eq!(0, std::mem::size_of::<FarmState>() % 8);
+#[cfg(any(feature = "test-bpf", target_arch = "bpf"))]
 static_assertions::const_assert_eq!(
     consts::SIZE_FARM_STATE,
     std::mem::size_of::<FarmState>() + 8
 );
-#[account(zero_copy)]
-#[derive(Debug, Eq, PartialEq)]
+#[cfg_attr(any(feature = "test-bpf", target_arch = "bpf"), account(zero_copy))]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[repr(C)]
 pub struct FarmState {
     pub farm_admin: Pubkey,
@@ -411,13 +415,15 @@ impl RewardScheduleCurve {
     }
 }
 
+#[cfg(any(feature = "test-bpf", target_arch = "bpf"))]
 static_assertions::const_assert_eq!(0, std::mem::size_of::<UserState>() % 8);
+#[cfg(any(feature = "test-bpf", target_arch = "bpf"))]
 static_assertions::const_assert_eq!(
     consts::SIZE_USER_STATE,
     std::mem::size_of::<UserState>() + 8
 );
-#[account(zero_copy)]
-#[derive(Debug, Eq, PartialEq)]
+#[cfg_attr(any(feature = "test-bpf", target_arch = "bpf"), account(zero_copy))]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct UserState {
     pub user_id: u64,
     pub farm_state: Pubkey,
@@ -506,9 +512,9 @@ impl Default for UserState {
     }
 }
 
-#[zero_copy]
+#[cfg_attr(any(feature = "test-bpf", target_arch = "bpf"), zero_copy)]
 #[repr(C)]
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
 pub struct RewardInfo {
     pub token: TokenInfo,
 
@@ -540,9 +546,9 @@ impl RewardInfo {
     }
 }
 
-#[zero_copy]
+#[cfg_attr(any(feature = "test-bpf", target_arch = "bpf"), zero_copy)]
 #[repr(C)]
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
 pub struct TokenInfo {
     pub mint: Pubkey,
     pub decimals: u64,
