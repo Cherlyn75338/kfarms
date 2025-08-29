@@ -1,0 +1,3 @@
+    pub fn analyze_deposit_flow(
+    pub fn apply_withdrawal_penalty(
+    pub fn calculate_lock_multiplier(
