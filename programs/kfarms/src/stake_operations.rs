@@ -183,6 +183,44 @@ pub fn convert_amount_to_stake(amount: u64, total_stake: Decimal, total_amount: 
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn convert_stake_to_amount_rounding() {
+        let total_stake = Decimal::from(3u64);
+        let total_amount = 10u64;
+        // stake 1/3 of total -> amount ~ 3.333...
+        let down = convert_stake_to_amount(Decimal::from(1u64), total_stake, total_amount, false);
+        let up = convert_stake_to_amount(Decimal::from(1u64), total_stake, total_amount, true);
+        assert_eq!(down, 3);
+        assert_eq!(up, 4);
+    }
+
+    #[test]
+    fn convert_amount_to_stake_identity_new_pool() {
+        let stake = convert_amount_to_stake(1234, Decimal::zero(), 0);
+        assert_eq!(stake, Decimal::from(1234u64));
+    }
+
+    #[test]
+    fn add_remove_active_stake_conservation() {
+        let mut farm = state::FarmState::default();
+        let mut user = state::UserState::default();
+
+        // start empty pool
+        let gained = add_active_stake(&mut user, &mut farm, 1_000).unwrap();
+        assert_eq!(farm.total_staked_amount, 1_000);
+        assert_eq!(farm.get_total_active_stake_decimal(), gained);
+
+        // remove half the stake in shares
+        let removed_amount = remove_active_stake(&mut user, &mut farm, gained / 2).unwrap();
+        assert_eq!(removed_amount, 500);
+        assert_eq!(farm.total_staked_amount, 500);
+    }
+}
+
 pub fn add_pending_deposit_stake(
     user_stake: &mut impl UserStakeAccessor,
     farm: &mut impl FarmStakeAccessor,

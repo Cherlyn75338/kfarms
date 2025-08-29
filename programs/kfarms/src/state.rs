@@ -186,6 +186,23 @@ impl FarmState {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reward_curve_cumulative_basic() {
+        let mut curve = RewardScheduleCurve::from_constant(10); // 10 per sec
+        let last = 1_000;
+        let now = 1_010;
+        assert_eq!(curve.get_cumulative_amount_issued_since_last_ts(last, now).unwrap(), 100);
+
+        // change after now shouldn't matter
+        curve.set_point(0, RewardPerTimeUnitPoint::new(0, 5));
+        assert!(curve.validate().is_ok());
+    }
+}
+
 impl Default for FarmState {
     fn default() -> FarmState {
         FarmState {

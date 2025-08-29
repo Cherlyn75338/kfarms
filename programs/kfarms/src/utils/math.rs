@@ -88,3 +88,51 @@ pub fn u64_mul_div(a: u64, b: u64, c: u64) -> u64 {
     let result = numerator / c;
     result.try_into().expect("u64_mul_div overflow")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use decimal_wad::decimal::Decimal;
+
+    #[test]
+    fn ten_pow_basic_values() {
+        assert_eq!(ten_pow(0), 1);
+        assert_eq!(ten_pow(1), 10);
+        assert_eq!(ten_pow(6), 1_000_000);
+        assert_eq!(ten_pow(9), 1_000_000_000);
+        assert_eq!(ten_pow(19), 10_000_000_000_000_000_000);
+    }
+
+    #[test]
+    #[should_panic]
+    fn ten_pow_out_of_range_panics() {
+        let _ = ten_pow(20);
+    }
+
+    #[test]
+    fn u64_mul_div_basic() {
+        assert_eq!(u64_mul_div(10, 5, 2), 25);
+        assert_eq!(u64_mul_div(100, 3, 4), 75);
+        assert_eq!(u64_mul_div(1_000_000_000, 10, 2), 5_000_000_000);
+    }
+
+    #[test]
+    fn full_decimal_mul_div_identity_like() {
+        let a = Decimal::from(12345u64);
+        let b = 9876u64;
+        let c = a; // a/c == 1
+
+        let result = full_decimal_mul_div(a, b, c);
+        assert_eq!(result, Decimal::from(b));
+    }
+
+    #[test]
+    fn full_decimal_mul_div_scaling_behavior() {
+        let a = Decimal::from(500u64);
+        let b = 200u64;
+        let c = Decimal::from(1000u64); // (500/1000) * 200 = 100
+
+        let result = full_decimal_mul_div(a, b, c);
+        assert_eq!(result, Decimal::from(100u64));
+    }
+}

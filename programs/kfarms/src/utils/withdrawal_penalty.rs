@@ -69,3 +69,53 @@ pub fn apply_early_withdrawal_penalty(
 
     Ok((unstake_amount - penalty_amount, penalty_amount))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn no_penalty_after_maturity() {
+        let duration = 100;
+        let start = 1_000;
+        let now = start + duration;
+        let (amt, pen) = apply_early_withdrawal_penalty(duration, start, now, 500, 1_000).unwrap();
+        assert_eq!(pen, 0);
+        assert_eq!(amt, 1_000);
+    }
+
+    #[test]
+    fn full_linear_penalty_midway() {
+        let duration = 1000;
+        let start = 10_000;
+        let now = start + 500; // 50% remaining => 50% of penalty_bps
+        let (_amt, pen) = apply_early_withdrawal_penalty(duration, start, now, 1000, 10_000).unwrap();
+        // penalty_bps_eff = 1000 * (500/1000) = 500 bps => 5%
+        assert_eq!(pen, 500);
+    }
+
+    #[test]
+    fn zero_penalty_before_start_with_expiry() {
+        let duration = 1_000;
+        let start = 10_000;
+        let now = start - 1; // before start -> current behavior returns 0 penalty
+        let (amt, pen) = apply_early_withdrawal_penalty(duration, start, now, 500, 10_000).unwrap();
+        assert_eq!(pen, 0);
+        assert_eq!(amt, 10_000);
+    }
+
+    #[test]
+    fn invalid_percentages_rejected() {
+        let duration = 100;
+        let start = 1000;
+        let now = start + 1;
+        let err = apply_early_withdrawal_penalty(duration, start, now, 0, 100).unwrap_err();
+        assert_eq!(err, FarmError::EarlyWithdrawalNotAllowed);
+
+        let err = apply_early_withdrawal_penalty(duration, start, now, 10000, 100).unwrap_err();
+        assert_eq!(err, FarmError::EarlyWithdrawalNotAllowed);
+
+        let err = apply_early_withdrawal_penalty(duration, start, now, 10001, 100).unwrap_err();
+        assert_eq!(err, FarmError::InvalidPenaltyPercentage);
+    }
+}
