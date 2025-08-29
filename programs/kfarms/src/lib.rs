@@ -311,3 +311,51 @@ impl From<DecimalError> for FarmError {
 }
 
 pub type FarmResult<T> = std::result::Result<T, FarmError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::withdrawal_penalty::apply_early_withdrawal_penalty;
+    use crate::state::RewardScheduleCurve;
+    use crate::state::FarmState;
+    use crate::utils::scope::load_scope_price;
+    use scope::{OraclePrices, Price, DatedPrice};
+
+    #[test]
+    fn test_penalty_overflow_guard_and_edges() {
+        // Zero duration -> error
+        assert!(apply_early_withdrawal_penalty(0, 100, 100, 500, 1_000).is_err());
+
+        // Before start -> zero penalty
+        let (after, penalty) = apply_early_withdrawal_penalty(100, 1_000, 900, 5_000, 1_000).unwrap();
+        assert_eq!(after, 1_000);
+        assert_eq!(penalty, 0);
+
+        // At maturity -> zero penalty
+        let (after2, penalty2) = apply_early_withdrawal_penalty(100, 1_000, 1_100, 5_000, 1_000).unwrap();
+        assert_eq!(after2, 1_000);
+        assert_eq!(penalty2, 0);
+
+        // Mid-way with large values tests no overflow
+        let (after3, penalty3) = apply_early_withdrawal_penalty(
+            1_000_000_000,
+            1_000,
+            500_000_000,
+            7_500,
+            u64::MAX / 2,
+        )
+        .unwrap();
+        assert!(penalty3 > 0);
+        assert_eq!(after3 + penalty3, u64::MAX / 2);
+    }
+
+    #[test]
+    fn test_reward_schedule_cumulative_overflow_guard() {
+        let mut curve = RewardScheduleCurve::from_constant(u64::MAX);
+        // set two points to simulate change, but function should handle range safely
+        curve.set_point(0, state::RewardPerTimeUnitPoint::new(0, u64::MAX));
+        let res = curve.get_cumulative_amount_issued_since_last_ts(0, 2);
+        // With MAX rps for 2 seconds, overflow would occur without guarding; now it should error or clamp
+        assert!(res.is_err() || res.unwrap() == u64::MAX);
+    }
+}

@@ -12,6 +12,11 @@ fn get_withdrawal_penalty_bps(
         return Err(FarmError::InvalidLockingTimestamps);
     }
 
+    let total_duration = timestamp_maturity - timestamp_beginning;
+    if total_duration == 0 {
+        return Err(FarmError::InvalidLockingTimestamps);
+    }
+
     if timestamp_now < timestamp_beginning {
         xmsg!(
             "timestamp_now < timestamp_beginning where the user withdraws before
@@ -41,9 +46,13 @@ fn get_withdrawal_penalty_bps(
 
     let time_remaining = timestamp_maturity - timestamp_now;
 
-    let total_duration = timestamp_maturity - timestamp_beginning;
+    // Compute in u128 to avoid intermediate overflow, then downcast safely
+    let penalty_u128 = (penalty_bps as u128)
+        .checked_mul(time_remaining as u128)
+        .ok_or(FarmError::IntegerOverflow)?
+        / (total_duration as u128);
 
-    let penalty = penalty_bps * time_remaining / total_duration;
+    let penalty: u64 = penalty_u128.try_into().map_err(|_| FarmError::IntegerOverflow)?;
 
     Ok(penalty)
 }
