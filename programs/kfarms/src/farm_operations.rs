@@ -593,7 +593,10 @@ pub fn user_refresh_reward(
 
     user_state.set_rewards_tally_decimal(reward_index, new_reward_tally);
 
-    user_state.rewards_issued_unclaimed[reward_index] += reward;
+    user_state.rewards_issued_unclaimed[reward_index] = user_state.rewards_issued_unclaimed
+        [reward_index]
+        .checked_add(reward)
+        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
 
     Ok(())
 }
@@ -660,9 +663,20 @@ pub fn reward_user_once(
     reward_index: u64,
     amount: u64,
 ) -> Result<()> {
-    farm_state.reward_infos[reward_index as usize].rewards_issued_unclaimed += amount;
-    farm_state.reward_infos[reward_index as usize].rewards_issued_cumulative += amount;
-    user_state.rewards_issued_unclaimed[reward_index as usize] += amount;
+    farm_state.reward_infos[reward_index as usize].rewards_issued_unclaimed = farm_state
+        .reward_infos[reward_index as usize]
+        .rewards_issued_unclaimed
+        .checked_add(amount)
+        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
+    farm_state.reward_infos[reward_index as usize].rewards_issued_cumulative = farm_state
+        .reward_infos[reward_index as usize]
+        .rewards_issued_cumulative
+        .checked_add(amount)
+        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
+    user_state.rewards_issued_unclaimed[reward_index as usize] = user_state
+        .rewards_issued_unclaimed[reward_index as usize]
+        .checked_add(amount)
+        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
     Ok(())
 }
 
@@ -785,15 +799,17 @@ pub fn refresh_global_reward(
             .get_cumulative_amount_issued_since_last_ts(reward_info.last_issuance_ts, ts)?)
             as u128;
 
-        let reward_type_amt = match reward_info.reward_type() {
+        let reward_type_amt: u128 = match reward_info.reward_type() {
             RewardType::Proportional => cumulative_amt,
-            RewardType::Constant => cumulative_amt * u128::from(farm_state.total_staked_amount),
+            RewardType::Constant => cumulative_amt
+                .checked_mul(u128::from(farm_state.total_staked_amount))
+                .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?,
         };
 
         let decimal_adjusted_amt =
             reward_type_amt / u128::from(ten_pow(reward_info.rewards_per_second_decimals.into()));
 
-        let oracle_adjusted_amt = if farm_state.scope_oracle_price_id == u64::MAX {
+        let oracle_adjusted_amt: u128 = if farm_state.scope_oracle_price_id == u64::MAX {
             decimal_adjusted_amt
         } else {
             let price = scope_price.ok_or(FarmError::MissingScopePrices)?;
@@ -807,10 +823,14 @@ pub fn refresh_global_reward(
                 return Err(FarmError::ScopeOraclePriceTooOld.into());
             } else {
                 xmsg!("Price: {:?}", price);
-                let decimal_adjusted_amt = decimal_adjusted_amt as u128;
-                let px = price.price.value as u128;
-                let factor = ten_pow(price.price.exp as usize) as u128;
-                decimal_adjusted_amt * px / factor
+                let decimal_adjusted_amt_u128: u128 = decimal_adjusted_amt as u128;
+                let px_u128: u128 = price.price.value as u128;
+                let factor_u128: u128 = ten_pow(price.price.exp as usize) as u128;
+
+                decimal_adjusted_amt_u128
+                    .checked_mul(px_u128)
+                    .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?
+                    / factor_u128
             }
         };
 
@@ -823,7 +843,9 @@ pub fn refresh_global_reward(
             oracle_adjusted_amt,
         );
 
-        oracle_adjusted_amt.try_into().unwrap()
+        oracle_adjusted_amt
+            .try_into()
+            .map_err(|_| dbg_msg!(FarmError::IntegerOverflow))?
     };
 
     if amount == 0 {
@@ -841,8 +863,8 @@ pub fn refresh_global_reward(
 
     farm_state.reward_infos[reward_index].last_issuance_ts = ts;
 
-    farm_state.reward_infos[reward_index].rewards_issued_unclaimed = farm_state.reward_infos
-        [reward_index]
+    farm_state.reward_infos[reward_index].rewards_issued_unclaimed = farm_state
+        .reward_infos[reward_index]
         .rewards_issued_unclaimed
         .checked_add(rewards)
         .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;

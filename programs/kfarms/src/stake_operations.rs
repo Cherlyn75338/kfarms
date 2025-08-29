@@ -199,7 +199,10 @@ pub fn add_pending_deposit_stake(
 
     user_stake.pending_deposit_stake = user_stake.pending_deposit_stake + user_gained_pending_stake;
 
-    farm.total_pending_amount += deposited_amount;
+    farm.total_pending_amount = farm
+        .total_pending_amount
+        .checked_add(deposited_amount)
+        .ok_or(FarmError::IntegerOverflow)?;
     farm.total_pending_stake = farm.total_pending_stake + user_gained_pending_stake;
 
     Ok(user_gained_pending_stake)
@@ -219,7 +222,10 @@ pub fn remove_pending_deposit_stake(
         false,
     );
 
-    farm.total_pending_amount -= pending_amount_removed;
+    farm.total_pending_amount = farm
+        .total_pending_amount
+        .checked_sub(pending_amount_removed)
+        .ok_or(FarmError::IntegerOverflow)?;
 
     farm.total_pending_stake = farm.total_pending_stake - user_stake.pending_deposit_stake;
 
@@ -244,7 +250,10 @@ pub fn add_active_stake(
 
     user_stake.active_stake = user_stake.active_stake + user_gained_active_stake;
 
-    farm.total_active_amount += staked_amount;
+    farm.total_active_amount = farm
+        .total_active_amount
+        .checked_add(staked_amount)
+        .ok_or(FarmError::IntegerOverflow)?;
     farm.total_active_stake = farm.total_active_stake + user_gained_active_stake;
 
     Ok(user_gained_active_stake)
@@ -283,7 +292,10 @@ pub fn remove_active_stake(
 
     user_stake.active_stake = user_stake.active_stake - unstaked_shares;
 
-    farm.total_active_amount -= unstaked_amount;
+    farm.total_active_amount = farm
+        .total_active_amount
+        .checked_sub(unstaked_amount)
+        .ok_or(FarmError::IntegerOverflow)?;
     farm.total_active_stake = farm.total_active_stake - unstaked_shares;
 
     Ok(unstaked_amount)
@@ -306,7 +318,10 @@ pub fn add_pending_withdrawal_stake(
     user_stake.pending_withdrawal_unstake =
         user_stake.pending_withdrawal_unstake + user_gained_pending_stake;
 
-    farm.total_pending_amount += unstaked_amount;
+    farm.total_pending_amount = farm
+        .total_pending_amount
+        .checked_add(unstaked_amount)
+        .ok_or(FarmError::IntegerOverflow)?;
     farm.total_pending_stake = farm.total_pending_stake + user_gained_pending_stake;
 
     Ok(user_gained_pending_stake)
@@ -376,7 +391,10 @@ pub fn remove_pending_withdrawal_stake(
         false,
     );
 
-    farm.total_pending_amount -= pending_amount_removed;
+    farm.total_pending_amount = farm
+        .total_pending_amount
+        .checked_sub(pending_amount_removed)
+        .ok_or(FarmError::IntegerOverflow)?;
     farm.total_pending_stake = farm.total_pending_stake - user_stake.pending_withdrawal_unstake;
 
     user_stake.pending_withdrawal_unstake = Decimal::zero();
@@ -390,7 +408,10 @@ pub fn increase_total_amount(
 ) -> Result<(), FarmError> {
     let mut farm = farm.get_accessor();
 
-    farm.total_active_amount += amount;
+    farm.total_active_amount = farm
+        .total_active_amount
+        .checked_add(amount)
+        .ok_or(FarmError::IntegerOverflow)?;
     Ok(())
 }
 
@@ -417,8 +438,14 @@ pub fn withdraw_farm(
     let removed_pending_amount: u64 =
         u64_mul_div(farm.total_pending_amount, req_withdraw_amount, vault_amount);
 
-    farm.total_active_amount -= removed_active_amount;
-    farm.total_pending_amount -= removed_pending_amount;
+    farm.total_active_amount = farm
+        .total_active_amount
+        .checked_sub(removed_active_amount)
+        .ok_or(FarmError::IntegerOverflow)?;
+    farm.total_pending_amount = farm
+        .total_pending_amount
+        .checked_sub(removed_pending_amount)
+        .ok_or(FarmError::IntegerOverflow)?;
 
     let amount_to_withdraw = removed_active_amount + removed_pending_amount;
 
