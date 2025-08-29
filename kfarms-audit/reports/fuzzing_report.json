@@ -1,0 +1,15 @@
+{
+  "config": {
+    "num_users": 10,
+    "num_pools": 5,
+    "num_operations": 100,
+    "seed": 42
+  },
+  "violations": [],
+  "summary": {
+    "total_violations": 0,
+    "critical": 0,
+    "high": 0,
+    "medium": 0
+  }
+}
