@@ -1,0 +1,20 @@
+    Finished test [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/farms-be0b78a1bc9fe83e)
+
+running 8 tests
+Withdraw farm vault: 6 (active) + 4 (pending) = 10 / 10
+Withdraw all farm vault (left frozen): 90
+timestamp_now < timestamp_beginning where the user withdraws before
+            the official locking period starts in the case of a "WithExpiry" locking mode
+Unstaking 500, with mode WithExpiry, got 500 and penalty 0
+test stake_operations::tests::convert_amount_to_stake_edges ... ok
+test stake_operations::tests::withdraw_farm_pro_rata_and_freeze ... ok
+test stake_operations::tests::unstake_penalty_with_expiry_before_start_zero_penalty ... ok
+test stake_operations::tests::convert_stake_to_amount_rounding ... ok
+test test_id ... ok
+test utils::math::tests::u64_mul_div_exact_when_divides ... ok
+test utils::math::tests::full_decimal_mul_div_consistency ... ok
+test utils::math::tests::u64_mul_div_monotone_in_numerator ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
