@@ -1,0 +1,8 @@
+=========================================
+Running Kamino Farms Comprehensive Tests
+=========================================
+
+[1;33mBuilding program...[0m
+error: no such command: `build-bpf`
+
+	View all installed commands with `cargo --list`
