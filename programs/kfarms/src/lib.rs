@@ -311,3 +311,6 @@ impl From<DecimalError> for FarmError {
 }
 
 pub type FarmResult<T> = std::result::Result<T, FarmError>;
+
+#[cfg(test)]
+mod tests;
