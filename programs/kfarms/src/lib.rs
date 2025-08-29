@@ -7,6 +7,9 @@ mod token_operations;
 mod types;
 pub mod utils;
 
+#[cfg(test)]
+mod tests;
+
 use crate::handlers::*;
 use anchor_lang::prelude::*;
 use decimal_wad::decimal::Decimal;
