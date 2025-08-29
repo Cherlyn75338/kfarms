@@ -299,6 +299,28 @@ pub fn update_farm_config(
             xmsg!("prev value {:?}", farm_state.second_delegated_authority);
             farm_state.second_delegated_authority = pubkey;
         }
+        FarmConfigOption::DelegatedKappaPerEpoch => {
+            let value: u64 = BorshDeserialize::try_from_slice(data)?;
+            xmsg!(
+                "farm_operations::update_farm_config delegated_kappa_per_epoch={value}",
+            );
+            farm_state.delegated_kappa_per_epoch = value;
+        }
+        FarmConfigOption::DelegatedEpochLength => {
+            let value: u64 = BorshDeserialize::try_from_slice(data)?;
+            xmsg!(
+                "farm_operations::update_farm_config delegated_epoch_length={value}",
+            );
+            farm_state.delegated_epoch_length = value;
+        }
+        FarmConfigOption::DelegatedTwapAlphaBps => {
+            let value: u64 = BorshDeserialize::try_from_slice(data)?;
+            require_gte!(10000, value, FarmError::InvalidConfigValue);
+            xmsg!(
+                "farm_operations::update_farm_config delegated_twap_alpha_bps={value}",
+            );
+            farm_state.delegated_twap_alpha_bps = value;
+        }
     };
     Ok(())
 }
@@ -467,7 +489,60 @@ pub fn set_stake(
         .try_into()
         .expect("Delegated farm: active stake don't fit on u64");
 
-    if current_stake_amount == new_stake {
+    // Optional delegated smoothing/bounds
+    let mut target_stake = new_stake;
+    if farm_state.is_delegated() {
+        // TWAP/EMA smoothing
+        if farm_state.delegated_twap_alpha_bps > 0 {
+            let alpha = farm_state.delegated_twap_alpha_bps;
+            if current_stake_amount != target_stake {
+                let delta = if current_stake_amount < target_stake {
+                    target_stake - current_stake_amount
+                } else {
+                    current_stake_amount - target_stake
+                };
+                let step = u64_mul_div(delta, alpha as u64, BPS_DIV_FACTOR);
+                if current_stake_amount < target_stake {
+                    target_stake = current_stake_amount
+                        .checked_add(step)
+                        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
+                } else {
+                    target_stake = current_stake_amount
+                        .checked_sub(step)
+                        .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
+                }
+            }
+        }
+
+        // κ-bound per epoch
+        if farm_state.delegated_epoch_length > 0 && farm_state.delegated_kappa_per_epoch > 0 {
+            let last_ts = user_state.last_stake_ts;
+            let elapsed = if ts > last_ts {
+                (ts - last_ts) / farm_state.delegated_epoch_length
+            } else {
+                0
+            };
+            let epochs = if elapsed == 0 { 1 } else { elapsed };
+            let max_delta = farm_state
+                .delegated_kappa_per_epoch
+                .checked_mul(epochs)
+                .ok_or_else(|| dbg_msg!(FarmError::IntegerOverflow))?;
+            let abs_diff = if current_stake_amount < target_stake {
+                target_stake - current_stake_amount
+            } else {
+                current_stake_amount - target_stake
+            };
+            if abs_diff > max_delta {
+                if current_stake_amount < target_stake {
+                    target_stake = current_stake_amount + max_delta;
+                } else {
+                    target_stake = current_stake_amount - max_delta;
+                }
+            }
+        }
+    }
+
+    if current_stake_amount == target_stake {
         xmsg!("farm_operations::set_stake nothing to do");
         return Ok(());
     }
@@ -479,12 +554,12 @@ pub fn set_stake(
     type OpAssignU128 = dyn Fn(&mut u128, u128);
 
     let (diff, op_u64, op_u128): (u64, &OpAssignU64, &OpAssignU128) =
-        if current_stake_amount > new_stake {
-            let diff = current_stake_amount - new_stake;
+        if current_stake_amount > target_stake {
+            let diff = current_stake_amount - target_stake;
 
             (diff, &u64::sub_assign, &u128::sub_assign)
         } else {
-            let diff = new_stake - current_stake_amount;
+            let diff = target_stake - current_stake_amount;
             initialize_reward_ts_if_needed(farm_state, ts);
             user_state.last_stake_ts = ts;
 
@@ -505,7 +580,7 @@ pub fn set_stake(
         let reward_tally = &mut user_state.rewards_tally_scaled[i];
         let reward_info = &farm_state.reward_infos[i];
 
-        *reward_tally = reward_info.reward_per_share_scaled * u128::from(new_stake);
+        *reward_tally = reward_info.reward_per_share_scaled * u128::from(target_stake);
     }
 
     Ok(())
@@ -573,6 +648,12 @@ pub fn user_refresh_reward(
     let rewards_tally = user_state.get_rewards_tally_decimal(reward_index);
     let reward_per_share = farm_state.reward_infos[reward_index].get_reward_per_share_decimal();
 
+    // Debug invariants (dev): monotonicity and non-negativity
+    debug_assert!(
+        farm_state.reward_infos[reward_index].rewards_issued_unclaimed
+            <= farm_state.reward_infos[reward_index].rewards_issued_cumulative
+    );
+
     let new_reward_tally: Decimal = if farm_state.is_delegated() {
         reward_per_share * user_state.active_stake_scaled
     } else {
@@ -591,6 +672,7 @@ pub fn user_refresh_reward(
         new_reward_tally.to_scaled_val::<u128>().unwrap()
     );
 
+    debug_assert!(new_reward_tally >= rewards_tally);
     user_state.set_rewards_tally_decimal(reward_index, new_reward_tally);
 
     user_state.rewards_issued_unclaimed[reward_index] += reward;
@@ -839,6 +921,9 @@ pub fn refresh_global_reward(
         ts
     );
 
+    debug_assert!(rewards <= reward_info.rewards_available);
+    debug_assert!(rewards >= 0);
+
     farm_state.reward_infos[reward_index].last_issuance_ts = ts;
 
     farm_state.reward_infos[reward_index].rewards_issued_unclaimed = farm_state.reward_infos
@@ -868,6 +953,7 @@ pub fn refresh_global_reward(
             Decimal::from(rewards) / farm_state.get_total_active_stake_decimal()
         };
 
+        debug_assert!(added_reward_per_share >= Decimal::zero());
         reward_per_share = reward_per_share + added_reward_per_share;
 
         farm_state.reward_infos[reward_index].set_reward_per_share_decimal(reward_per_share);
@@ -885,6 +971,10 @@ pub fn refresh_global_rewards(
 
     for reward_index in 0..farm_state.num_reward_tokens as usize {
         refresh_global_reward(farm_state, scope_price, ts, reward_index)?;
+        debug_assert!(
+            farm_state.reward_infos[reward_index].last_issuance_ts <= ts,
+            "last_issuance_ts must not move forward beyond ts"
+        );
     }
 
     Ok(())

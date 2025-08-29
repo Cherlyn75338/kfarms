@@ -5,6 +5,14 @@ KFarms is open source software for smart contracts for the Solana blockchain.
 KFarms allows its users to deposit/lock their tokens in different pools in exchange for some rewards.
 The staking points giving access to rewards can also be set by another protocol keeping custody of the user tokens.
 
+## Optional delegated controls
+
+- delegated_kappa_per_epoch: max absolute change in delegated stake per epoch (tokens)
+- delegated_epoch_length: epoch length in current time unit
+- delegated_twap_alpha_bps: EMA smoothing factor (0..10000 bps)
+
+Configured via `UpdateFarmConfig` with the new enum variants.
+
 ## License
 
 This software and codebase is licensed under the Apache License, Version 2.0 (the "License");

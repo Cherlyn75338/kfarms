@@ -15,7 +15,11 @@ pub fn process(ctx: Context<UpdateFarmConfig>, mode: u16, data: &[u8]) -> Result
 
     if matches!(
         mode,
-        FarmConfigOption::UpdateRewardRps | FarmConfigOption::UpdateRewardScheduleCurvePoints
+        FarmConfigOption::UpdateRewardRps
+            | FarmConfigOption::UpdateRewardScheduleCurvePoints
+            | FarmConfigOption::DelegatedKappaPerEpoch
+            | FarmConfigOption::DelegatedEpochLength
+            | FarmConfigOption::DelegatedTwapAlphaBps
     ) {
         require!(
             farm_state.delegated_rps_admin == *ctx.accounts.signer.key
