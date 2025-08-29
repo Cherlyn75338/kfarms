@@ -3,6 +3,8 @@ pub mod farm_operations;
 mod handlers;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod vulnerability_tests;
 pub mod stake_operations;
 pub mod state;
 mod token_operations;
