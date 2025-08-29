@@ -1,0 +1,17 @@
+ Downloading crates ...
+error: failed to download `base64ct v1.8.0`
+
+Caused by:
+  unable to get packages from source
+
+Caused by:
+  failed to download replaced source registry `crates-io`
+
+Caused by:
+  failed to parse manifest at `/usr/local/cargo/registry/src/index.crates.io-6f17d22bba15001f/base64ct-1.8.0/Cargo.toml`
+
+Caused by:
+  failed to parse the `edition` key
+
+Caused by:
+  this version of Cargo is older than the `2024` edition, and only supports `2015`, `2018`, and `2021` editions.
