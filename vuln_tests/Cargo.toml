@@ -1,0 +1,11 @@
+[package]
+name = "vuln_tests"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+decimal-wad = "0.1.9"
+
+[dependencies]
+decimal-wad = "0.1.9"
+
