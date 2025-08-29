@@ -5,6 +5,11 @@ KFarms is open source software for smart contracts for the Solana blockchain.
 KFarms allows its users to deposit/lock their tokens in different pools in exchange for some rewards.
 The staking points giving access to rewards can also be set by another protocol keeping custody of the user tokens.
 
+Audit artifacts:
+- Threat model and invariants spec: see `docs/audit/phase1.md`
+- Math spec and proofs: see `docs/audit/math.md`
+- Test harness and fuzzing: see `tests/`
+
 ## License
 
 This software and codebase is licensed under the Apache License, Version 2.0 (the "License");

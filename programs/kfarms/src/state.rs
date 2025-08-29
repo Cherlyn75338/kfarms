@@ -376,7 +376,7 @@ impl RewardScheduleCurve {
             return err!(FarmError::InvalidTimestamp);
         }
 
-        let mut cumulative_amount = 0u64;
+        let mut cumulative_amount: u64 = 0;
 
         let start_index = self.most_recent_curve_starting_point(last_issued_ts)?;
 
@@ -398,8 +398,16 @@ impl RewardScheduleCurve {
                 current_ts
             };
 
-            let period_amount = point.reward_per_time_unit * (end_ts - start_ts);
-            cumulative_amount += period_amount;
+            let duration: u64 = end_ts - start_ts;
+            let period_amount_u128 = (point.reward_per_time_unit as u128)
+                .saturating_mul(duration as u128);
+            let new_cumulative_u128 = (cumulative_amount as u128).saturating_add(period_amount_u128);
+
+            if new_cumulative_u128 > u64::MAX as u128 {
+                return err!(FarmError::IntegerOverflow);
+            }
+
+            cumulative_amount = new_cumulative_u128 as u64;
         }
 
         Ok(cumulative_amount)
