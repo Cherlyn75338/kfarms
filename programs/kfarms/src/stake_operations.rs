@@ -177,9 +177,13 @@ pub fn convert_amount_to_stake(amount: u64, total_stake: Decimal, total_amount: 
             Decimal::zero(),
             "Total amount is zero but total stake is not"
         );
-        Decimal::from(amount)
+        let stake = Decimal::from(amount);
+        debug_assert!(stake >= Decimal::zero());
+        stake
     } else {
-        total_stake * amount / total_amount
+        let stake = total_stake * amount / total_amount;
+        debug_assert!(stake >= Decimal::zero());
+        stake
     }
 }
 

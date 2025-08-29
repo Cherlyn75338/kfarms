@@ -125,7 +125,15 @@ pub struct FarmState {
     pub vault_id: Pubkey,
     pub second_delegated_authority: Pubkey,
 
-    pub _padding: [u64; 74],
+    // Optional delegated controls
+    // Max absolute change in delegated stake per epoch (in tokens)
+    pub delegated_kappa_per_epoch: u64,
+    // Length of one epoch in current time unit (seconds or slots). 0 disables κ-bound
+    pub delegated_epoch_length: u64,
+    // TWAP/EMA smoothing factor in basis points applied to delegated stake updates. 0 disables TWAP
+    pub delegated_twap_alpha_bps: u64,
+
+    pub _padding: [u64; 71],
 }
 
 impl FarmState {
@@ -242,7 +250,11 @@ impl Default for FarmState {
             vault_id: Pubkey::default(),
             second_delegated_authority: Pubkey::default(),
 
-            _padding: [0; 74],
+            delegated_kappa_per_epoch: 0,
+            delegated_epoch_length: 0,
+            delegated_twap_alpha_bps: 0,
+
+            _padding: [0; 71],
         }
     }
 }
@@ -585,6 +597,9 @@ pub enum FarmConfigOption {
     UpdateDelegatedRpsAdmin,
     UpdateVaultId,
     UpdateExtraDelegatedAuthority,
+    DelegatedKappaPerEpoch,
+    DelegatedEpochLength,
+    DelegatedTwapAlphaBps,
 }
 
 #[derive(
