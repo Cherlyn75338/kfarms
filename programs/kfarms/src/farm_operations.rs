@@ -598,6 +598,45 @@ pub fn user_refresh_reward(
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn new_farm_with_one_reward() -> FarmState {
+        let mut fs = FarmState::default();
+        fs.num_reward_tokens = 1;
+        fs.reward_infos[0].rewards_available = u64::MAX / 2;
+        fs.reward_infos[0].rewards_per_second_decimals = 0;
+        fs.reward_infos[0].reward_schedule_curve.set_constant(10); // 10 units per second
+        fs
+    }
+
+    #[test]
+    fn reward_issuance_increases_rps_and_unclaimed() {
+        let mut fs = new_farm_with_one_reward();
+        let mut us = UserState::default();
+
+        // stake 100 tokens immediately
+        let _ = stake_ops::add_active_stake(&mut us, &mut fs, 100).unwrap();
+        assert_eq!(fs.total_staked_amount, 100);
+
+        // initial ts
+        let t0 = 1_000_000;
+        fs.reward_infos[0].last_issuance_ts = t0;
+
+        // advance 5 seconds
+        let t1 = t0 + 5;
+        refresh_global_rewards(&mut fs, None, t1).unwrap();
+
+        // 10 rps * 5 sec = 50 issued (bounded by available)
+        assert_eq!(fs.reward_infos[0].rewards_issued_unclaimed, 50);
+
+        // user accrues all since he is the only staker
+        user_refresh_reward(&mut fs, &mut us, 0).unwrap();
+        assert_eq!(us.rewards_issued_unclaimed[0], 50);
+    }
+}
+
 pub fn user_refresh_all_rewards(
     farm_state: &mut FarmState,
     user_state: &mut UserState,
