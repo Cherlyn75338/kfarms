@@ -42,8 +42,13 @@ fn get_withdrawal_penalty_bps(
     let time_remaining = timestamp_maturity - timestamp_now;
 
     let total_duration = timestamp_maturity - timestamp_beginning;
+    if total_duration == 0 {
+        xmsg!("Invalid locking timestamps: zero duration");
+        return Err(FarmError::InvalidLockingTimestamps);
+    }
 
-    let penalty = penalty_bps * time_remaining / total_duration;
+    // Use safe mul/div helper to avoid overflow
+    let penalty = u64_mul_div(time_remaining, penalty_bps, total_duration);
 
     Ok(penalty)
 }

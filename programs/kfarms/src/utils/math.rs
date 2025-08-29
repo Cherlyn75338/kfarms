@@ -11,6 +11,7 @@ mod big_ints {
 }
 
 use big_ints::U256;
+use crate::FarmError;
 
 pub fn ten_pow(x: usize) -> u64 {
     const POWERS_OF_TEN: [u64; 20] = [
@@ -87,4 +88,27 @@ pub fn u64_mul_div(a: u64, b: u64, c: u64) -> u64 {
     let numerator = a * b;
     let result = numerator / c;
     result.try_into().expect("u64_mul_div overflow")
+}
+
+/// Multiplies two u128 values and divides by a third, avoiding intermediate overflow by
+/// promoting to U256. Returns an error on division-by-zero or if the result does not fit in u128.
+pub fn u128_mul_div(a: u128, b: u128, c: u128) -> Result<u128, FarmError> {
+    if c == 0 {
+        return Err(FarmError::MathOverflow);
+    }
+
+    let a_256: U256 = a.into();
+    let b_256: U256 = b.into();
+    let c_256: U256 = c.into();
+
+    let numerator: U256 = a_256.saturating_mul(b_256);
+    let result_256: U256 = numerator / c_256;
+
+    // Ensure the result fits in u128
+    let max_u128: U256 = u128::MAX.into();
+    if result_256 > max_u128 {
+        return Err(FarmError::IntegerOverflow);
+    }
+
+    Ok(result_256.as_u128())
 }
