@@ -183,6 +183,93 @@ pub fn convert_amount_to_stake(amount: u64, total_stake: Decimal, total_amount: 
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    #[test]
+    fn convert_stake_amount_roundtrip_simple() {
+        let total_stake = Decimal::from(200u64);
+        let total_amount = 1_000u64;
+        let user_stake = Decimal::from(50u64);
+
+        let amt = convert_stake_to_amount(user_stake, total_stake, total_amount, false);
+        assert_eq!(amt, 250);
+        let back = convert_amount_to_stake(amt, total_stake, total_amount);
+        assert_eq!(back.try_floor::<u64>().unwrap(), 50u64);
+    }
+
+    #[test]
+    fn pro_rata_withdraw_farm_splits() {
+        let mut farm = state::FarmState::default();
+        {
+            let mut acc = farm.get_accessor();
+            acc.total_active_amount = 800;
+            acc.total_pending_amount = 200;
+        }
+
+        let res = withdraw_farm(&mut farm, 500).unwrap();
+        // 500/1000 of active(800) = 400, pending(200) = 100
+        assert_eq!(res.amount_to_withdraw, 500);
+        let acc = farm.get_accessor();
+        assert_eq!(acc.total_active_amount, 400);
+        assert_eq!(acc.total_pending_amount, 100);
+        assert!(!res.farm_to_freeze);
+    }
+}
+
+#[cfg(test)]
+mod prop_tests {
+    use super::*;
+    use proptest::prelude::*;
+    use decimal_wad::decimal::Decimal;
+
+    // Share conversion round-trip should not inflate value (flooring may lose at most small unit)
+    proptest! {
+        #[test]
+        fn amount_to_stake_roundtrip_loss_bounded(
+            amount in 0u64..=1_000_000u64,
+            total_amount in 1u64..=1_000_000u64,
+            total_stake_raw in 1u64..=1_000_000u64,
+        ) {
+            let total_stake = Decimal::from(total_stake_raw);
+            let stake = convert_amount_to_stake(amount, total_stake, total_amount);
+            // round down on the way back
+            let back = convert_stake_to_amount(stake, total_stake, total_amount, false);
+            // no inflation
+            prop_assert!(back <= amount);
+            // loss bounded by 1 for proportional floor in this direction
+            prop_assert!(amount.saturating_sub(back) <= 1);
+        }
+
+        #[test]
+        fn stake_to_amount_roundtrip_loss_bounded(
+            stake_raw in 0u64..=1_000_000u64,
+            total_amount in 1u64..=1_000_000u64,
+            total_stake_raw in 1u64..=1_000_000u64,
+        ) {
+            // Avoid extreme ratios where rounding loss can be arbitrarily large in one step
+            prop_assume!(total_stake_raw > 1);
+            prop_assume!(total_amount > 1);
+            // Realistic invariant: user stake cannot exceed total stake
+            prop_assume!(stake_raw <= total_stake_raw);
+
+            let total_stake = Decimal::from(total_stake_raw);
+            let stake = Decimal::from(stake_raw);
+            let amount = convert_stake_to_amount(stake, total_stake, total_amount, false);
+            let back = convert_amount_to_stake(amount, total_stake, total_amount);
+
+            let back_floor = back.try_floor::<u64>().unwrap_or(u64::MAX);
+            prop_assert!(back_floor <= stake_raw);
+
+            // Allow bounded relative loss: at most 1 share per 10_000 total stake units
+            let max_loss = (total_stake_raw / 10_000).max(2);
+            prop_assert!(stake_raw.saturating_sub(back_floor) as u64 <= max_loss as u64);
+        }
+    }
+}
+
 pub fn add_pending_deposit_stake(
     user_stake: &mut impl UserStakeAccessor,
     farm: &mut impl FarmStakeAccessor,
