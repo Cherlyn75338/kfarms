@@ -948,3 +948,79 @@ fn update_user_rewards_tally_on_stake_increase(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn default_farm_with_one_reward() -> FarmState {
+        let mut farm_state = FarmState::default();
+        farm_state.num_reward_tokens = 1;
+        // Ensure we pass the early-return guard for zero stake
+        farm_state.total_active_stake_scaled = 1;
+        farm_state
+    }
+
+    #[test]
+    #[should_panic]
+    fn constant_rewards_amount_panics_on_u64_try_into_overflow() {
+        // Setup: Constant rewards with extremely large total_staked_amount to force u64 conversion panic
+        let mut farm_state = default_farm_with_one_reward();
+        farm_state.total_staked_amount = u64::MAX;
+
+        let reward_index = 0usize;
+        let last_ts: u64 = 1_000;
+        let current_ts: u64 = last_ts + 2; // cumulative_amt = 2
+
+        let reward_info = &mut farm_state.reward_infos[reward_index];
+        reward_info.reward_type = RewardType::Constant as u8;
+        reward_info.rewards_per_second_decimals = 0; // no decimal reduction
+        reward_info.last_issuance_ts = last_ts;
+        reward_info.reward_schedule_curve = RewardScheduleCurve::from_constant(1); // rps = 1
+        reward_info.rewards_available = u64::MAX; // not relevant for the panic, but avoid clamping effect
+
+        // This should panic at oracle_adjusted_amt.try_into().unwrap() due to > u64::MAX
+        let _ = refresh_global_reward(&mut farm_state, None, current_ts, reward_index);
+    }
+
+    #[test]
+    fn cumulative_amount_wraps_due_to_unchecked_u64_mul_add() {
+        // period_amount = rps * (end_ts - start_ts) is unchecked u64 mul
+        // Use rps = u64::MAX and dt = 2 -> wrap to u64::MAX - 1
+        let curve = RewardScheduleCurve::from_constant(u64::MAX);
+        let last = 0u64;
+        let now = 2u64;
+
+        let wrapped = curve
+            .get_cumulative_amount_issued_since_last_ts(last, now)
+            .expect("calc should return even if wrapped");
+
+        assert_eq!(wrapped, u64::MAX - 1);
+
+        // The mathematically correct value would be 2 * u64::MAX, which does not fit in u64
+        let correct: u128 = (u64::MAX as u128) * 2u128;
+        assert!(correct > u128::from(u64::MAX));
+    }
+
+    #[test]
+    fn rewards_issued_cumulative_overflow_returns_error() {
+        // Ensure that even with small amounts, overflow of counters causes DoS-style error
+        let mut farm_state = default_farm_with_one_reward();
+        farm_state.total_staked_amount = 1; // keep amount small
+
+        let reward_index = 0usize;
+        let last_ts: u64 = 10_000;
+        let current_ts: u64 = last_ts + 1; // cumulative_amt = 1
+
+        let reward_info = &mut farm_state.reward_infos[reward_index];
+        reward_info.reward_type = RewardType::Proportional as u8; // keep amount minimal
+        reward_info.rewards_per_second_decimals = 0;
+        reward_info.last_issuance_ts = last_ts;
+        reward_info.reward_schedule_curve = RewardScheduleCurve::from_constant(1); // rps = 1
+        reward_info.rewards_available = 10; // enough to issue
+        reward_info.rewards_issued_cumulative = u64::MAX; // next addition overflows
+
+        let res = refresh_global_reward(&mut farm_state, None, current_ts, reward_index);
+        assert!(res.is_err(), "expected IntegerOverflow error due to counter overflow");
+    }
+}
