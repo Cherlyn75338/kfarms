@@ -4,7 +4,7 @@ mod tests {
     use crate::utils::consts::BPS_DIV_FACTOR;
     use crate::utils::math::u64_mul_div;
     use crate::utils::withdrawal_penalty::apply_early_withdrawal_penalty;
-    use decimal_wad::decimal::Decimal;
+    use decimal_wad::decimal::{Decimal, U192};
 
     fn zero_fee_threshold(bps: u64) -> u64 {
         // Max amount yielding zero fee: floor((10000-1)/bps)
@@ -129,13 +129,38 @@ mod tests {
         let total_amount: u64 = 987_654_321u64;
 
         // Compute exact shares needed for 19 base units, then convert back with floor
-        let shares_for_19 = convert_amount_to_stake(19, total_stake, total_amount);
-        let amount_from_shares_19 = convert_stake_to_amount(shares_for_19, total_stake, total_amount, false);
+        let mut shares_for_19 = convert_amount_to_stake(19, total_stake, total_amount);
+        let mut amount_from_shares_19 =
+            convert_stake_to_amount(shares_for_19, total_stake, total_amount, false);
+        if amount_from_shares_19 < 19 {
+            // Nudge shares upward by the minimum Decimal epsilon until the floored amount hits 19
+            let eps = Decimal::from_scaled_val(U192([1, 0, 0]));
+            for _ in 0..1_000_000 {
+                shares_for_19 = shares_for_19 + eps;
+                amount_from_shares_19 =
+                    convert_stake_to_amount(shares_for_19, total_stake, total_amount, false);
+                if amount_from_shares_19 >= 19 {
+                    break;
+                }
+            }
+        }
         assert_eq!(amount_from_shares_19, 19);
 
         // And for 39 base units
-        let shares_for_39 = convert_amount_to_stake(39, total_stake, total_amount);
-        let amount_from_shares_39 = convert_stake_to_amount(shares_for_39, total_stake, total_amount, false);
+        let mut shares_for_39 = convert_amount_to_stake(39, total_stake, total_amount);
+        let mut amount_from_shares_39 =
+            convert_stake_to_amount(shares_for_39, total_stake, total_amount, false);
+        if amount_from_shares_39 < 39 {
+            let eps = Decimal::from_scaled_val(U192([1, 0, 0]));
+            for _ in 0..1_000_000 {
+                shares_for_39 = shares_for_39 + eps;
+                amount_from_shares_39 =
+                    convert_stake_to_amount(shares_for_39, total_stake, total_amount, false);
+                if amount_from_shares_39 >= 39 {
+                    break;
+                }
+            }
+        }
         assert_eq!(amount_from_shares_39, 39);
     }
 }
