@@ -126,6 +126,7 @@ pub fn calc_amount_wrapping(
 #[cfg(test)]
 mod tests {
     use super::*;
+    const MOD_2_64: u128 = 1u128 << 64;
 
     #[test]
     fn period_wraps_with_large_rps_and_dt() {
@@ -195,6 +196,71 @@ mod tests {
         let to_issue = 1u64;
         let overflow = rewards_issued_cumulative.checked_add(to_issue);
         assert!(overflow.is_none(), "overflow triggers IntegerOverflow -> DoS");
+    }
+
+    #[test]
+    fn realistic_overflow_large_remainder_drains_vault() {
+        // Realistic scale: rps ~ 3e13 (pre-decimal), dt ~ 1e6 seconds (~11.6 days)
+        let rps: u64 = 30_000_000_000_000;
+        let dt: u64 = 1_000_000;
+        let pts = [Point { ts_start: 0, reward_per_time_unit: rps }];
+        let last = 0u64;
+        let now = dt;
+
+        let wrapped = get_cumulative_amount_issued_since_last_ts_wrapping(&pts, last, now);
+
+        // Expected wrapped remainder = (rps * dt) % 2^64
+        let correct_u128 = (rps as u128) * (dt as u128);
+        assert!(correct_u128 > (u64::MAX as u128));
+        let expected_remainder = (correct_u128 % MOD_2_64) as u64;
+        assert_eq!(wrapped, expected_remainder);
+
+        // Clamp by rewards_available drains the vault if available < wrapped
+        let rewards_available: u64 = 1_000_000_000_000; // 1e12
+        let issued = core::cmp::min(wrapped, rewards_available);
+        assert_eq!(issued, rewards_available);
+    }
+
+    #[test]
+    fn realistic_overflow_small_remainder_under_issuance() {
+        // Choose rps close to floor(2^64 / dt) to make product just over the boundary
+        let dt: u64 = 1_000_000;
+        let near_boundary_rps = (u64::MAX as u128 + 1u128) / (dt as u128); // floor(2^64 / dt)
+        let rps: u64 = (near_boundary_rps as u64).saturating_add(1);
+        let pts = [Point { ts_start: 0, reward_per_time_unit: rps }];
+
+        let wrapped = get_cumulative_amount_issued_since_last_ts_wrapping(&pts, 0, dt);
+        let correct_u128 = (rps as u128) * (dt as u128);
+        assert!(correct_u128 > (u64::MAX as u128));
+        let expected_remainder = (correct_u128 % MOD_2_64) as u64;
+        assert_eq!(wrapped, expected_remainder);
+
+        // If remainder is small, issuance is small despite massive true amount
+        assert!(wrapped < 1_000_000u64);
+    }
+
+    #[test]
+    fn multi_point_add_overflow_wraps_sum() {
+        // Two adjacent periods each below 2^64, but their sum exceeds 2^64
+        let rps: u64 = 9_500_000_000_000; // 9.5e12
+        let dt: u64 = 1_000_000; // 1e6 seconds
+
+        // Build two points at t=0 and t=dt, so both contribute dt each when last=0 and now=2*dt
+        let pts = [
+            Point { ts_start: 0, reward_per_time_unit: rps },
+            Point { ts_start: dt, reward_per_time_unit: rps },
+        ];
+        let wrapped = get_cumulative_amount_issued_since_last_ts_wrapping(&pts, 0, 2 * dt);
+
+        let a = (rps as u128) * (dt as u128);
+        let b = a;
+        assert!(a < MOD_2_64);
+        assert!(b < MOD_2_64);
+        let sum = a + b;
+        assert!(sum > (u64::MAX as u128));
+        let expected_remainder = (sum % MOD_2_64) as u64;
+        assert_eq!(wrapped, expected_remainder);
+        assert!(wrapped > 0);
     }
 }
 
