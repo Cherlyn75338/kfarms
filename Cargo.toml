@@ -1,5 +1,5 @@
 [workspace]
-members = ["programs/*"]
+members = ["programs/*", "poc_overflow"]
 resolver = "2"
 
 [profile.release]
