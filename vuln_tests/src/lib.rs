@@ -101,19 +101,24 @@ mod tests {
     #[test]
     fn zero_treasury_fee_thresholds() {
         let fee_25 = 250u64;
+        println!("2.5% fee: fee(39)={}, fee(40)={}", u64_mul_div(39, fee_25, BPS_DIV_FACTOR), u64_mul_div(40, fee_25, BPS_DIV_FACTOR));
         assert_eq!(u64_mul_div(39, fee_25, BPS_DIV_FACTOR), 0);
         assert_eq!(u64_mul_div(40, fee_25, BPS_DIV_FACTOR), 1);
 
         let fee_5 = 500u64;
+        println!("5% fee: fee(19)={}, fee(20)={}", u64_mul_div(19, fee_5, BPS_DIV_FACTOR), u64_mul_div(20, fee_5, BPS_DIV_FACTOR));
         assert_eq!(u64_mul_div(19, fee_5, BPS_DIV_FACTOR), 0);
         assert_eq!(u64_mul_div(20, fee_5, BPS_DIV_FACTOR), 1);
 
         // WSOL 9 decimals
         let one_sol = ten_pow(9);
         let fee_one_sol = u64_mul_div(one_sol, fee_25, BPS_DIV_FACTOR);
+        println!("2.5% fee: fee(1 SOL base units={})={}", one_sol, fee_one_sol);
         assert!(fee_one_sol > 0);
         let thirty_nine_sol = 39 * one_sol;
-        assert!(u64_mul_div(thirty_nine_sol, fee_25, BPS_DIV_FACTOR) > 0);
+        let fee_39_sol = u64_mul_div(thirty_nine_sol, fee_25, BPS_DIV_FACTOR);
+        println!("2.5% fee: fee(39 SOL base units={})={}", thirty_nine_sol, fee_39_sol);
+        assert!(fee_39_sol > 0);
         assert_eq!(u64_mul_div(39, fee_25, BPS_DIV_FACTOR), 0);
     }
 
@@ -125,10 +130,12 @@ mod tests {
         let now = locking_start; // earliest, full penalty applies
 
         let (net_19, pen_19) = apply_early_withdrawal_penalty(locking_duration, locking_start, now, penalty_bps, 19).unwrap();
+        println!("5% early penalty at start: amount=19 -> net={}, penalty={}", net_19, pen_19);
         assert_eq!(pen_19, 0);
         assert_eq!(net_19, 19);
 
         let (net_20, pen_20) = apply_early_withdrawal_penalty(locking_duration, locking_start, now, penalty_bps, 20).unwrap();
+        println!("5% early penalty at start: amount=20 -> net={}, penalty={}", net_20, pen_20);
         assert_eq!(pen_20, 1);
         assert_eq!(net_20, 19);
 
@@ -142,11 +149,13 @@ mod tests {
             total_pen += p;
             total_net += n;
         }
+        println!("Splitting: {} chunks x {} -> total_net={}, total_penalty={}", chunks, chunk_amt, total_net, total_pen);
         assert_eq!(total_pen, 0);
         assert_eq!(total_net, chunks * chunk_amt);
 
         let total = chunks * chunk_amt; // 19_000
         let (_, pen_single) = apply_early_withdrawal_penalty(locking_duration, locking_start, now, penalty_bps, total).unwrap();
+        println!("Single unstake: amount={} -> penalty={}", total, pen_single);
         assert_eq!(pen_single, u64_mul_div(total, penalty_bps, BPS_DIV_FACTOR));
         assert_eq!(pen_single, 950);
     }
@@ -160,10 +169,12 @@ mod tests {
         let now = 50u64;
 
         let (net_39, pen_39) = apply_early_withdrawal_penalty(locking_duration, locking_start, now, penalty_bps, 39).unwrap();
+        println!("Midway (eff ~2.5%): amount=39 -> net={}, penalty={}", net_39, pen_39);
         assert_eq!(pen_39, 0);
         assert_eq!(net_39, 39);
 
         let (net_40, pen_40) = apply_early_withdrawal_penalty(locking_duration, locking_start, now, penalty_bps, 40).unwrap();
+        println!("Midway (eff ~2.5%): amount=40 -> net={}, penalty={}", net_40, pen_40);
         assert_eq!(pen_40, 1);
         assert_eq!(net_40, 39);
     }
@@ -183,14 +194,18 @@ mod tests {
     fn large_amounts_pay_fees_and_penalties() {
         let fee_bps_25 = 250u64; // 2.5%
         let one_sol = ten_pow(9);
-        assert!(u64_mul_div(one_sol, fee_bps_25, BPS_DIV_FACTOR) > 0);
-        assert!(u64_mul_div(39 * one_sol, fee_bps_25, BPS_DIV_FACTOR) > 0);
+        let fee_1_sol = u64_mul_div(one_sol, fee_bps_25, BPS_DIV_FACTOR);
+        let fee_39_sol = u64_mul_div(39 * one_sol, fee_bps_25, BPS_DIV_FACTOR);
+        println!("2.5% fee: 1 SOL fee={}, 39 SOL fee={}", fee_1_sol, fee_39_sol);
+        assert!(fee_1_sol > 0);
+        assert!(fee_39_sol > 0);
 
         let penalty_bps = 500u64;
         let locking_start = 0u64;
         let locking_duration = 100u64;
         let now = 99u64; // 1% remaining -> eff ~ 5 bps
         let (_, pen) = apply_early_withdrawal_penalty(locking_duration, locking_start, now, penalty_bps, one_sol).unwrap();
+        println!("Near maturity (~5 bps eff): 1 SOL penalty={}", pen);
         assert!(pen > 0);
     }
 }
