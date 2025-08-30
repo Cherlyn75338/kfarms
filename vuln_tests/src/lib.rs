@@ -208,5 +208,58 @@ mod tests {
         println!("Near maturity (~5 bps eff): 1 SOL penalty={}", pen);
         assert!(pen > 0);
     }
+
+    #[test]
+    fn profitability_analysis() {
+        // Parameters
+        let fee_bps_cases = [250u64, 500u64]; // 2.5%, 5%
+        let tokens = [
+            ("USDC", 6usize, 1.0_f64),
+            ("WSOL", 9usize, 150.0_f64),
+            ("ZERO_DEC_EXAMPLE", 0usize, 1.0_f64),
+        ];
+        let tx_fee_usd_cases = [0.00001_f64, 0.0001_f64, 0.001_f64];
+
+        println!("=== Profitability per micro-op (USD saved per chunk vs tx fee) ===");
+        for &bps in &fee_bps_cases {
+            let threshold = ((BPS_DIV_FACTOR - 1) / bps) as f64; // e.g., 19 for 5%, 39 for 2.5%
+            for &(sym, dec, price) in &tokens {
+                let saved_per_chunk_usd = threshold * (bps as f64 / 10000.0) * price / 10f64.powi(dec as i32);
+                for &tx_fee_usd in &tx_fee_usd_cases {
+                    let profitable = if saved_per_chunk_usd > tx_fee_usd { "YES" } else { "NO" };
+                    println!(
+                        "bps={} token={} dec={} price=${} threshold={} saved_per_chunk=${:.10} tx_fee=${} PROFITABLE={}",
+                        bps, sym, dec, price, threshold as u64, saved_per_chunk_usd, tx_fee_usd, profitable
+                    );
+                }
+            }
+        }
+
+        // Example: total position size and required chunk count
+        let examples = [
+            ("USDC", 6usize, 1.0_f64, 1_000.0_f64),   // $1k USDC
+            ("USDC", 6usize, 1.0_f64, 100_000.0_f64), // $100k USDC
+            ("WSOL", 9usize, 150.0_f64, 100.0_f64),   // 100 SOL @ $150
+        ];
+        let bps = 500u64; // 5% penalty effective
+        let threshold = ((BPS_DIV_FACTOR - 1) / bps) as u64; // 19
+        println!("=== Chunk counts and total saved vs tx fees (bps=5%) ===");
+        for &(sym, dec, price, position_units) in &examples {
+            // Convert position to base units
+            let base_units = if dec == 0 {
+                position_units as u64
+            } else {
+                (position_units * 10f64.powi(dec as i32)) as u64
+            };
+            let n_chunks = (base_units + threshold - 1) / threshold;
+            let saved_total_usd = (base_units as f64) * (bps as f64 / 10000.0) * price / 10f64.powi(dec as i32);
+            let tx_fee_usd = 0.0001_f64; // assume $0.0001 per tx
+            let total_tx_cost_usd = (n_chunks as f64) * tx_fee_usd;
+            println!(
+                "token={} dec={} price=${} position_units={} base_units={} chunks={} saved_total=${:.6} tx_cost=${:.6} NET=${:.6}",
+                sym, dec, price, position_units, base_units, n_chunks, saved_total_usd, total_tx_cost_usd, saved_total_usd - total_tx_cost_usd
+            );
+        }
+    }
 }
 
