@@ -10,5 +10,5 @@ pub const BASE_SEED_TREASURY_VAULTS_AUTHORITY: &[u8; 9] = b"authority";
 pub const BASE_SEED_USER_STATE: &[u8; 4] = b"user";
 
 pub const SIZE_GLOBAL_CONFIG: usize = 2136;
-pub const SIZE_FARM_STATE: usize = 8336;
-pub const SIZE_USER_STATE: usize = 920;
+pub const SIZE_FARM_STATE: usize = 8328;  // 66624 bits / 8 = 8328 bytes (expected size)
+pub const SIZE_USER_STATE: usize = 912;   // 7296 bits / 8 = 912 bytes (expected size)

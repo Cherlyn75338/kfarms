@@ -311,3 +311,10 @@ impl From<DecimalError> for FarmError {
 }
 
 pub type FarmResult<T> = std::result::Result<T, FarmError>;
+
+// Include vulnerability tests
+#[cfg(test)]
+mod vulnerability_tests;
+
+#[cfg(test)]
+mod lib_test;

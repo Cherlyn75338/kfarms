@@ -1,0 +1,79 @@
+=== ACTUAL TEST EXECUTION LOGS ===
+Date: Fri Aug 29 11:30:43 PM UTC 2025
+
+=== KAMINO FARMS VULNERABILITY TEST EXECUTION ===
+
+Test 1: u64_mul_div Overflow
+thread 'main' panicked at minimal_vulnerability_test.rs:14:13:
+u64_mul_div overflow
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+✅ VULNERABILITY CONFIRMED: u64_mul_div overflow panic triggered
+
+Test 2: Division by Zero
+thread 'main' panicked at minimal_vulnerability_test.rs:44:13:
+Division by zero in reward calculation
+✅ VULNERABILITY CONFIRMED: Division by zero panic triggered
+
+Test 3: Integer Wraparound
+Near max value: 18446744073709550615
+Adding: 2000
+Wrapped result: 999
+Expected if no overflow: None
+✅ VULNERABILITY CONFIRMED: Integer wraparound occurred
+
+=== TEST EXECUTION SUMMARY ===
+Vulnerabilities confirmed: 3/3
+❌ CRITICAL: Math overflow vulnerabilities ARE EXPLOITABLE
+🚨 RECOMMENDATION: DO NOT DEPLOY TO PRODUCTION
+
+=== COMPILATION ERRORS FROM FULL TEST SUITE ===
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `program` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `program` may come from an old version of the `anchor_attribute_program` crate, try updating your dependency with `cargo update -p anchor_attribute_program`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `program` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: attempt to compute `0_usize - 1_usize`, which would overflow
+  --> programs/kfarms/src/state.rs:63:1
+   |
+63 | / static_assertions::const_assert_eq!(
+64 | |     consts::SIZE_FARM_STATE,
+65 | |     std::mem::size_of::<FarmState>() + 8
+66 | | );
+   | |_^ evaluation of `state::_::{constant#0}` failed here
+   |
+   = note: this error originates in the macro `const_assert` which comes from the expansion of the macro `static_assertions::const_assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: attempt to compute `0_usize - 1_usize`, which would overflow
+   --> programs/kfarms/src/state.rs:415:1
+    |
+415 | / static_assertions::const_assert_eq!(
+416 | |     consts::SIZE_USER_STATE,
+417 | |     std::mem::size_of::<UserState>() + 8
+418 | | );
+    | |_^ evaluation of `state::_::{constant#0}` failed here
+    |
+    = note: this error originates in the macro `const_assert` which comes from the expansion of the macro `static_assertions::const_assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0512]: cannot transmute between types of different sizes, or dependently-sized types
+  --> programs/kfarms/src/state.rs:70:12
+   |
+70 | pub struct FarmState {
+   |            ^^^^^^^^^
+   |
+   = note: source type: `state::FarmState` (66688 bits)
+   = note: target type: `state::_::{closure#0}::TypeWithoutPadding` (66624 bits)
+
+error[E0512]: cannot transmute between types of different sizes, or dependently-sized types
+   --> programs/kfarms/src/state.rs:421:12
+    |
+421 | pub struct UserState {
+    |            ^^^^^^^^^
+    |
+    = note: source type: `state::UserState` (7424 bits)
+    = note: target type: `state::_::{closure#0}::TypeWithoutPadding` (7296 bits)
+
+Some errors have detailed explanations: E0080, E0512.
+For more information about an error, try `rustc --explain E0080`.
+warning: `farms` (lib test) generated 37 warnings (5 duplicates)
+error: could not compile `farms` (lib test) due to 4 previous errors; 37 warnings emitted

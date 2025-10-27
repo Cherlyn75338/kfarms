@@ -1,0 +1,43 @@
+[package]
+name = "farms-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+farms = { path = ".." }
+anchor-lang = "0.29.0"
+anchor-spl = "0.29.0"
+solana-sdk = "1.17.18"
+spl-token = "4.0.0"
+spl-token-2022 = "0.9.0"
+decimal-wad = "0.1.9"
+arbitrary = { version = "1", features = ["derive"] }
+
+[[bin]]
+name = "fuzz_instruction_sequence"
+path = "fuzz_targets/fuzz_instruction_sequence.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_math_operations"
+path = "fuzz_targets/fuzz_math_operations.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_reward_calculations"
+path = "fuzz_targets/fuzz_reward_calculations.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_compute_dos"
+path = "fuzz_targets/fuzz_compute_dos.rs"
+test = false
+doc = false
