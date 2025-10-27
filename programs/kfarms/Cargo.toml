@@ -11,6 +11,10 @@ crate-type = ["cdylib", "lib"]
 name = "farms"
 doctest = false
 
+[dev-dependencies]
+proptest = "1.4"
+rand = "0.8"
+
 [features]
 no-entrypoint = []
 test-bpf = []
